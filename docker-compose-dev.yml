@@ -109,7 +109,7 @@ services:
     group_add:
       - "988"
     env_file:
-      - /home/ubuntu/monitor/alloy.env
+      - ./monitoring/alloy/alloy.env
     command:
       - run
       - --storage.path=/var/lib/alloy

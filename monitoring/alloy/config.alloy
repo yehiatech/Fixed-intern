@@ -1,0 +1,27 @@
+logging {
+  level = "info"
+  format = "logfmt"
+}
+
+// Automatically discover all Docker containers running on the server
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+// Scrape the logs from those containers
+loki.source.docker "default" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.docker.containers.targets
+  forward_to = [loki.write.grafana_cloud.receiver]
+}
+
+// Send the logs securely to Grafana Cloud
+loki.write "grafana_cloud" {
+  endpoint {
+    url = sys.env("LOKI_URL")
+    basic_auth {
+      username = sys.env("LOKI_USERNAME")
+      password = sys.env("LOKI_PASSWORD")
+    }
+  }
+}
