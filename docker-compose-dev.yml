@@ -106,7 +106,7 @@ services:
         max-file: "3"
     user: "473:473"
     group_add:
-      - "988"
+      - "998"
     env_file:
       - ./monitoring/alloy/alloy.env
     command:
