@@ -1,0 +1,137 @@
+version: '3.8'
+
+services:
+  db:
+    image: ankane/pgvector:latest
+    container_name: fenec-postgres
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      POSTGRES_DB: ${DB_NAME:-ai_callcenter}
+      POSTGRES_USER: ${DB_USER:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-supersecretpassword}
+    ports:
+      - "5432:5432"
+    volumes:
+      - prod_pgdata:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${DB_NAME:-ai_callcenter}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  espocrm:
+    image: espocrm/espocrm:latest
+    container_name: fenec-espocrm
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      ESPOCRM_DATABASE_PLATFORM: Postgresql
+      ESPOCRM_DATABASE_HOST: db
+      ESPOCRM_DATABASE_USER: ${DB_USER:-admin}
+      ESPOCRM_DATABASE_PASSWORD: ${DB_PASSWORD:-supersecretpassword}
+      ESPOCRM_DATABASE_NAME: ${DB_NAME:-ai_callcenter}
+      ESPOCRM_SITE_URL: "http://localhost:8080"
+    ports:
+      - "8080:80"
+    volumes:
+      - espocrm_data:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+
+  espocrm-daemon:
+    image: espocrm/espocrm:latest
+    container_name: fenec-espocrm-daemon
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    volumes:
+      - espocrm_data:/var/www/html
+    entrypoint: docker-daemon.sh
+    depends_on:
+      - espocrm
+
+  call-orchestrator:
+    build: ./call-orchestrator
+    container_name: fenec-call-orchestrator
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    env_file: .env
+    ports:
+      - "8001:8001"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  rag-chatbot:
+    build: ./rag-chatbot
+    container_name: fenec-rag-chatbot
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    env_file: .env
+    ports:
+      - "8002:8002"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  alloy:
+    image: grafana/alloy:v1.18.1
+    container_name: fenec-alloy
+    restart: unless-stopped
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+    user: "473:473"
+    group_add:
+      - "988"
+    env_file:
+      - /home/ubuntu/monitor/alloy.env
+    command:
+      - run
+      - --storage.path=/var/lib/alloy
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - alloy_data:/var/lib/alloy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          /usr/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/12345 &&
+          printf "GET /-/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3 &&
+          IFS= read -r status <&3 &&
+          [[ "$$status" == *"200 OK"* ]]'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  prod_pgdata:
+  espocrm_data:
+  alloy_data:

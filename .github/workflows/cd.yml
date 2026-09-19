@@ -1,0 +1,28 @@
+name: CD
+
+# Only deploy if the CI workflow successfully completes on the main branch
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [ "main" ]
+    types:
+      - completed
+
+jobs:
+  deploy:
+    name: Deploy to AWS EC2
+    runs-on: ubuntu-latest
+    # Double check that the CI didn't fail before deploying
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: SSH into EC2 & Deploy Docker
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/ai_callcenter_workspace
+            git pull origin main
+            docker compose up -d --build
