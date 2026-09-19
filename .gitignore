@@ -38,3 +38,4 @@ Thumbs.db
 
 # SSH Keys
 *.pem
+monitoring/alloy/alloy.env
