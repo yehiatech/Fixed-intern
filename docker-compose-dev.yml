@@ -1,8 +1,7 @@
-version: '3.8'
 
 services:
   db:
-    image: ankane/pgvector:latest
+    image: ankane/pgvector:v0.5.1
     container_name: fenec-postgres
     restart: unless-stopped
     logging:
@@ -26,7 +25,7 @@ services:
       retries: 5
 
   espocrm:
-    image: espocrm/espocrm:latest
+    image: espocrm/espocrm:8.3
     container_name: fenec-espocrm
     restart: unless-stopped
     logging:
@@ -50,7 +49,7 @@ services:
         condition: service_healthy
 
   espocrm-daemon:
-    image: espocrm/espocrm:latest
+    image: espocrm/espocrm:8.3
     container_name: fenec-espocrm-daemon
     restart: unless-stopped
     logging:
