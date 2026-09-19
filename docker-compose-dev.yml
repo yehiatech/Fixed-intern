@@ -38,7 +38,7 @@ services:
       ESPOCRM_DATABASE_HOST: db
       ESPOCRM_DATABASE_USER: ${DB_USER:-admin}
       ESPOCRM_DATABASE_PASSWORD: ${DB_PASSWORD:-supersecretpassword}
-      ESPOCRM_DATABASE_NAME: ${DB_NAME:-ai_callcenter}
+      ESPOCRM_DATABASE_NAME: espocrm
       ESPOCRM_SITE_URL: "http://localhost:8080"
     ports:
       - "8080:80"
