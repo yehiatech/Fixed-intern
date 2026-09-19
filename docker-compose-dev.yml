@@ -114,6 +114,7 @@ services:
       - --storage.path=/var/lib/alloy
       - /etc/alloy/config.alloy
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
       - /var/snap/docker/common/var-lib-docker/containers:/var/lib/docker/containers:ro
       - alloy_data:/var/lib/alloy
