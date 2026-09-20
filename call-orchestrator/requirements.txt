@@ -3,6 +3,8 @@ uvicorn[standard]==0.30.6
 pydantic==2.9.2
 pydantic-settings==2.5.2
 boto3==1.35.24
-twilio==9.3.2
+livekit==0.17.2
+livekit-agents==0.8.2
+livekit-plugins-anthropic==0.5.2
 psycopg2-binary==2.9.9
 python-dotenv==1.0.1
