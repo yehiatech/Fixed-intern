@@ -1,6 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
+
+from ingestion import ingest_pdf
 
 app = FastAPI(
     title="Arabic RAG Chatbot Microservice",
@@ -12,12 +14,12 @@ app = FastAPI(
 def read_root():
     return {"service": "RAG Chatbot", "status": "running"}
 
-# Health Check Endpoint (required by T-15 acceptance criteria)
+# Health Check Endpoint
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
 
-# Request Schemas (kept for T-16 / T-17, not used by placeholders yet)
+# Request Schemas
 class ChatRequest(BaseModel):
     organization_id: str
     user_id: Optional[str] = None
@@ -32,7 +34,13 @@ class IngestRequest(BaseModel):
 def chat_placeholder(request: ChatRequest):
     return {"message": "not implemented"}
 
-# Placeholder Ingest Endpoint (real logic comes in T-16)
+# Ingest Endpoint (T-16: real PDF -> chunk -> embed -> pgvector pipeline)
 @app.post("/ingest")
-def ingest_placeholder(request: IngestRequest):
-    return {"message": "not implemented"}
+def ingest(request: IngestRequest):
+    try:
+        result = ingest_pdf(request.file_path, request.organization_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"File not found: {request.file_path}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"message": "ingested", **result}
