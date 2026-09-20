@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.errors import APIError
-from app.routers import calls, health
+from app.routers import calls, health, voice
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,6 +32,7 @@ app = FastAPI(
 
 app.include_router(health.router)
 app.include_router(calls.router)
+app.include_router(voice.router)
 
 
 @app.exception_handler(APIError)
