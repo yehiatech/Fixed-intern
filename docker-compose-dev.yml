@@ -131,11 +131,6 @@ services:
       retries: 5
       start_period: 10s
 
-volumes:
-  prod_pgdata:
-  espocrm_data:
-  alloy_data:
-
   bridge-scripts:
     build: ./scripts
     container_name: bridge-scripts
@@ -160,3 +155,9 @@ volumes:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+volumes:
+  prod_pgdata:
+  espocrm_data:
+  alloy_data:
+
