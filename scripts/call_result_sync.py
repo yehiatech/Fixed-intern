@@ -64,10 +64,16 @@ def update_espo_result(call_id, result_data, current_attempts):
     elif status == "unanswered":
         new_attempts = current_attempts + 1
         if new_attempts >= 3:
-            payload = {"status": "Failed", "callAttempts": new_attempts}
+            payload = {"status": "failed_max_retries", "callAttempts": new_attempts}
         else:
             # Requeue for next attempt
-            payload = {"status": "Pending", "callAttempts": new_attempts}
+            import datetime
+            next_retry = datetime.datetime.utcnow() + datetime.timedelta(minutes=15)
+            payload = {
+                "status": "pending",
+                "callAttempts": new_attempts,
+                "nextRetryAt": next_retry.strftime("%Y-%m-%d %H:%M:%S")
+            }
     elif status == "in_progress":
         logging.info(f"Call {call_id} is still in progress, no update needed.")
         return

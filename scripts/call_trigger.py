@@ -29,7 +29,20 @@ def get_pending_calls():
         res.raise_for_status()
         data = res.json()
         calls = data.get("list", [])
-        return [c for c in calls if c.get("status") == "Pending" or c.get("status") == "pending"]
+        
+        import datetime
+        now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        valid_calls = []
+        for c in calls:
+            status = str(c.get("status")).lower()
+            if status != "pending":
+                continue
+            
+            next_retry = c.get("nextRetryAt")
+            if not next_retry or next_retry <= now:
+                valid_calls.append(c)
+                
+        return valid_calls
     except Exception as e:
         logging.error(f"Error fetching pending calls: {e}")
         return []
