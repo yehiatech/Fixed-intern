@@ -147,9 +147,16 @@ volumes:
         max-file: "3"
     env_file: .env
     environment:
-      # Internal Docker URLs so it doesn't need to route through the public internet
       ESPO_API_URL: "http://espocrm:80/api/v1"
       ORCHESTRATOR_URL: "http://call-orchestrator:8001/calls"
+    volumes:
+      - ./scripts:/app
     depends_on:
       - espocrm
       - call-orchestrator
+    healthcheck:
+      test: ["CMD", "pidof", "crond"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
