@@ -135,3 +135,21 @@ volumes:
   prod_pgdata:
   espocrm_data:
   alloy_data:
+
+  bridge-scripts:
+    build: ./scripts
+    container_name: bridge-scripts
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    env_file: .env
+    environment:
+      # Internal Docker URLs so it doesn't need to route through the public internet
+      ESPO_API_URL: "http://espocrm:80/api/v1"
+      ORCHESTRATOR_URL: "http://call-orchestrator:8001/calls"
+    depends_on:
+      - espocrm
+      - call-orchestrator
