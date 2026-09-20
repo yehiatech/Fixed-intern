@@ -1,10 +1,10 @@
 name: CD
 
-# Only deploy if the CI workflow successfully completes on the main branch
+# Only deploy if the CI workflow successfully completes on the dev branch
 on:
   workflow_run:
     workflows: ["CI"]
-    branches: [ "main" ]
+    branches: [ "dev" ]
     types:
       - completed
 
@@ -12,7 +12,6 @@ jobs:
   deploy:
     name: Deploy to AWS EC2
     runs-on: ubuntu-latest
-    # Double check that the CI didn't fail before deploying
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
     steps:
@@ -23,6 +22,9 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd /home/ubuntu/ai_callcenter_workspace
-            git pull origin main
-            docker compose up -d --build
+            # Navigate to the correct folder
+            cd /home/ubuntu/Fixed-intern
+            # Pull the latest dev code
+            git pull origin dev
+            # Restart the containers
+            sudo docker compose -f docker-compose-dev.yml up -d --build
