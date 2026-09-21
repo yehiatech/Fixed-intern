@@ -75,8 +75,35 @@ services:
     env_file: .env
     ports:
       - "8001:8001"
+    volumes:
+      - ./call-orchestrator:/app
     depends_on:
       db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  livekit-agent:
+    build: ./call-orchestrator
+    container_name: livekit-agent
+    command: python livekit_agent.py start
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    env_file: .env
+    volumes:
+      - ./call-orchestrator:/app
+    depends_on:
+      livekit:
+        condition: service_healthy
+      call-orchestrator:
         condition: service_healthy
 
   rag-chatbot:
@@ -147,8 +174,10 @@ services:
     volumes:
       - ./scripts:/app
     depends_on:
-      - espocrm
-      - call-orchestrator
+      espocrm:
+        condition: service_healthy
+      call-orchestrator:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "pidof", "crond"]
       interval: 30s
@@ -156,8 +185,23 @@ services:
       retries: 3
       start_period: 10s
 
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: livekit-server
+    command: --dev
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
+    environment:
+      - LIVEKIT_KEYS=devkey:secret
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7880/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   prod_pgdata:
   espocrm_data:
   alloy_data:
-
