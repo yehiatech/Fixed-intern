@@ -30,7 +30,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/calls", tags=["calls"])
 
 
-import os
 from livekit.api import AccessToken, VideoGrants
 
 @router.post("/trigger", response_model=CallTriggerResponse, status_code=202)
@@ -69,7 +68,7 @@ def trigger_call(payload: CallTriggerRequest) -> CallTriggerResponse:
     return CallTriggerResponse(
         status="accepted",
         call_id=payload.call_id,
-        twilio_sid=token, # Reusing schema field temporarily to hold token
+        livekit_token=token,
         message="LiveKit Room Created",
     )
 

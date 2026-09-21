@@ -10,3 +10,4 @@ livekit-api==0.3.0
 livekit-agents==0.7.1
 livekit-plugins-aws==0.7.0
 livekit-plugins-silero==0.4.0
+livekit-plugins-deepgram==0.4.0

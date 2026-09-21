@@ -20,7 +20,7 @@ class CallTriggerRequest(BaseModel):
 class CallTriggerResponse(BaseModel):
     status: Literal["accepted"]
     call_id: str
-    twilio_sid: str
+    livekit_token: str
     message: str
 
 

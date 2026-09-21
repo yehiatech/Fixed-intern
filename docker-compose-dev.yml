@@ -79,6 +79,21 @@ services:
       db:
         condition: service_healthy
 
+  livekit-agent:
+    build: ./call-orchestrator
+    container_name: livekit-agent
+    command: python livekit_agent.py start
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    env_file: .env
+    depends_on:
+      - livekit
+      - call-orchestrator
+
   rag-chatbot:
     build: ./rag-chatbot
     container_name: rag-chatbot
