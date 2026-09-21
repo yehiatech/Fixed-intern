@@ -46,7 +46,7 @@ services:
       - espocrm_data:/var/www/html
     depends_on:
       db:
-        condition: service_healthy
+        condition: service_started
 
   espocrm-daemon:
     image: espocrm/espocrm:8.3
@@ -79,7 +79,7 @@ services:
       - ./call-orchestrator:/app
     depends_on:
       db:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 10s
@@ -102,9 +102,9 @@ services:
       - ./call-orchestrator:/app
     depends_on:
       livekit:
-        condition: service_healthy
+        condition: service_started
       call-orchestrator:
-        condition: service_healthy
+        condition: service_started
 
   rag-chatbot:
     build: ./rag-chatbot
@@ -120,7 +120,7 @@ services:
       - "8002:8002"
     depends_on:
       db:
-        condition: service_healthy
+        condition: service_started
 
   alloy:
     image: grafana/alloy:v1.18.1
@@ -175,9 +175,9 @@ services:
       - ./scripts:/app
     depends_on:
       espocrm:
-        condition: service_healthy
+        condition: service_started
       call-orchestrator:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD", "pidof", "crond"]
       interval: 30s
