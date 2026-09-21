@@ -201,6 +201,15 @@ services:
       timeout: 5s
       retries: 5
 
+  chat-widget:
+    image: nginx:alpine
+    container_name: chat-widget
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    volumes:
+      - ./chat-widget:/usr/share/nginx/html:ro
+
 volumes:
   prod_pgdata:
   espocrm_data:
