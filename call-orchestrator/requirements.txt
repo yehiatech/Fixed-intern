@@ -6,9 +6,9 @@ python-multipart==0.0.9
 boto3==1.35.24
 psycopg2-binary==2.9.9
 python-dotenv==1.0.1
-livekit-api==0.3.0
-livekit-agents==0.7.1
-livekit-plugins-aws==1.8.2
-livekit-plugins-silero==0.4.0
-livekit-plugins-deepgram==0.4.0
+livekit-api
+livekit-agents
+livekit-plugins-aws
+livekit-plugins-silero
+livekit-plugins-deepgram
 aiohttp==3.9.5
