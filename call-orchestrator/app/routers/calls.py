@@ -14,7 +14,6 @@ import uuid
 from fastapi import APIRouter
 
 
-from app.bedrock_client import is_dev_mode
 from app.config import get_settings
 from app.conversation_state import exists, get_state, init_call
 from app.errors import APIError
