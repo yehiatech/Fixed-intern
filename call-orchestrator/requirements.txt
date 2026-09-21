@@ -3,7 +3,6 @@ uvicorn[standard]
 pydantic
 pydantic-settings
 python-multipart
-boto3
 psycopg2-binary
 python-dotenv
 livekit-api
