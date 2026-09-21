@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from ingestion import ingest_pdf
+from chat import handle_chat
 
 app = FastAPI(
     title="Arabic RAG Chatbot Microservice",
@@ -29,10 +30,14 @@ class IngestRequest(BaseModel):
     organization_id: str
     file_path: str
 
-# Placeholder Chat Endpoint (real logic comes in T-17)
+# Chat Endpoint (T-17: Topic Guard + Bedrock tool calling + citations)
 @app.post("/chat")
-def chat_placeholder(request: ChatRequest):
-    return {"message": "not implemented"}
+def chat(request: ChatRequest):
+    try:
+        result = handle_chat(request.query, request.organization_id, request.user_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return result
 
 # Ingest Endpoint (T-16: real PDF -> chunk -> embed -> pgvector pipeline)
 @app.post("/ingest")
