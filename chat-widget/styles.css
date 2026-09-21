@@ -43,8 +43,9 @@ body {
     width: 350px;
     height: 500px;
     background-color: #ffffff;
-    border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    border: 1px solid #d9d9d9;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -61,12 +62,13 @@ body {
 
 /* Header */
 .chat-header {
-    background-color: #0056b3;
-    color: white;
-    padding: 15px;
+    background-color: #f8f9fa;
+    color: #333333;
+    padding: 12px 15px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    border-bottom: 1px solid #d9d9d9;
 }
 
 .chat-header-info {
@@ -76,28 +78,34 @@ body {
 }
 
 .bot-avatar {
-    font-size: 24px;
-    background-color: rgba(255, 255, 255, 0.2);
-    padding: 10px;
-    border-radius: 50%;
+    font-size: 20px;
+    color: #177a94;
 }
 
 .chat-header h3 {
-    font-size: 16px;
+    font-size: 15px;
+    font-weight: 600;
     margin: 0;
+    color: #333;
 }
 
 .status-indicator {
-    font-size: 12px;
-    color: #a8d5ff;
+    font-size: 11px;
+    color: #28a745;
+    font-weight: bold;
 }
 
 .close-btn {
     background: none;
     border: none;
-    color: white;
-    font-size: 20px;
+    color: #999;
+    font-size: 18px;
     cursor: pointer;
+    transition: color 0.2s;
+}
+
+.close-btn:hover {
+    color: #333;
 }
 
 /* Messages Area */
@@ -108,19 +116,20 @@ body {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    background-color: #f9f9f9;
+    background-color: #f5f6f8;
 }
 
 .message {
     display: flex;
-    max-width: 80%;
+    max-width: 85%;
 }
 
 .message .bubble {
     padding: 10px 14px;
-    border-radius: 14px;
-    font-size: 14px;
+    border-radius: 8px;
+    font-size: 13.5px;
     line-height: 1.5;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
 /* AI Message */
@@ -129,9 +138,10 @@ body {
 }
 
 .ai-message .bubble {
-    background-color: #e9ecef;
+    background-color: #ffffff;
     color: #333;
-    border-bottom-right-radius: 4px;
+    border: 1px solid #e0e0e0;
+    border-bottom-right-radius: 0;
 }
 
 /* User Message */
@@ -140,52 +150,55 @@ body {
 }
 
 .user-message .bubble {
-    background-color: #0056b3;
+    background-color: #177a94;
     color: white;
-    border-bottom-left-radius: 4px;
+    border: 1px solid #146277;
+    border-bottom-left-radius: 0;
 }
 
 /* Input Area */
 .chat-input-area {
-    padding: 15px;
-    background-color: #ffffff;
-    border-top: 1px solid #ddd;
+    padding: 12px;
+    background-color: #f8f9fa;
+    border-top: 1px solid #d9d9d9;
     display: flex;
-    gap: 10px;
+    gap: 8px;
 }
 
 #chat-input {
     flex: 1;
-    padding: 10px 15px;
-    border: 1px solid #ddd;
-    border-radius: 20px;
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
     outline: none;
     font-family: inherit;
-    font-size: 14px;
-    transition: border-color 0.3s;
+    font-size: 13.5px;
+    color: #333;
+    background-color: #ffffff;
+    transition: border-color 0.2s;
 }
 
 #chat-input:focus {
-    border-color: #0056b3;
+    border-color: #66afe9;
 }
 
 .send-btn {
-    background-color: #0056b3;
+    background-color: #177a94;
     color: white;
-    border: none;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
+    border: 1px solid #146277;
+    width: 38px;
+    height: 38px;
+    border-radius: 4px;
     cursor: pointer;
-    font-size: 16px;
+    font-size: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 0.3s;
+    transition: background-color 0.2s;
 }
 
 .send-btn:hover {
-    background-color: #004494;
+    background-color: #126379;
 }
 
 /* Loading Indicator (Typing animation) */
@@ -193,11 +206,13 @@ body {
     display: flex;
     gap: 4px;
     padding: 10px 14px;
-    background-color: #e9ecef;
-    border-radius: 14px;
+    background-color: #ffffff;
+    border-radius: 8px;
     width: fit-content;
     align-self: flex-start;
     margin-left: 15px;
+    border: 1px solid #e0e0e0;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
 .loading-indicator.hidden {
