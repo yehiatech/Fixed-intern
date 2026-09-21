@@ -4,10 +4,19 @@ import logging
 from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, cli, llm
 from livekit.agents.pipeline import VoicePipelineAgent
 from livekit.plugins import aws, silero, deepgram
-
-from app.conversation_state import get_state
-
+import logging
 logger = logging.getLogger("livekit-agent")
+logger = logging.getLogger("livekit-agent")
+
+import requests
+
+def _update_state(call_id: str, payload: dict):
+    # Using Docker internal hostname to reach the orchestrator API
+    url = f"http://call-orchestrator:8001/calls/internal/state/{call_id}"
+    try:
+        requests.post(url, json=payload, timeout=5)
+    except Exception as e:
+        logger.error(f"Failed to update state for {call_id}: {e}")
 
 class CallCenterTools(llm.FunctionContext):
     """
@@ -19,40 +28,45 @@ class CallCenterTools(llm.FunctionContext):
 
     @llm.ai_callable(description="استخدم هذه الأداة عندما يؤكد العميل أن مشكلته السابقة تم حلها بالكامل.")
     async def mark_ticket_resolved(self, ticket_id: str, resolution_note: str):
-        state = get_state(self.call_id)
-        if state:
-            state["resolution"] = "resolved_first_call"
-            state["sentiment"] = "positive"
-            state["tools_used"].append("mark_ticket_resolved")
+        payload = {
+            "resolution": "resolved_first_call",
+            "sentiment": "positive",
+            "tools_used": ["mark_ticket_resolved"]
+        }
+        await asyncio.to_thread(_update_state, self.call_id, payload)
         logger.info(f"Ticket {ticket_id} marked resolved: {resolution_note}")
         return "تم تسجيل حل المشكلة."
 
     @llm.ai_callable(description="استخدم هذه الأداة عندما يقول العميل إن المشكلة لسه موجودة أو يصف مشكلة جديدة.")
     async def record_complaint(self, ticket_id: str, complaint_text: str):
-        state = get_state(self.call_id)
-        if state:
-            state["resolution"] = "unresolved_complaint"
-            state["sentiment"] = "frustrated"
-            state["tools_used"].append("record_complaint")
+        payload = {
+            "resolution": "unresolved_complaint",
+            "sentiment": "frustrated",
+            "tools_used": ["record_complaint"]
+        }
+        await asyncio.to_thread(_update_state, self.call_id, payload)
         logger.info(f"Complaint recorded for {ticket_id}: {complaint_text}")
         return "تم تسجيل الشكوى."
 
     @llm.ai_callable(description="استخدم هذه الأداة لما العميل يطلب صراحة يتكلم مع موظف حقيقي.")
     async def transfer_to_agent(self, ticket_id: str, reason: str):
-        state = get_state(self.call_id)
-        if state:
-            state["resolution"] = "transferred_to_agent"
-            state["tools_used"].append("transfer_to_agent")
+        payload = {
+            "resolution": "transferred_to_agent",
+            "tools_used": ["transfer_to_agent"],
+            "ended": True
+        }
+        await asyncio.to_thread(_update_state, self.call_id, payload)
         logger.info(f"Transferring {ticket_id} to agent. Reason: {reason}")
         return "جاري تحويلك إلى موظف خدمة العملاء."
 
     @llm.ai_callable(description="استخدم هذه الأداة لما تكون المحادثة خلصت طبيعي وتحب تقفل المكالمة بلطف.")
     async def end_call(self, goodbye_message: str):
-        state = get_state(self.call_id)
-        if state:
-            state["resolution"] = state.get("resolution") or "call_ended"
-            state["ended"] = True
-            state["tools_used"].append("end_call")
+        payload = {
+            "resolution": "call_ended",
+            "ended": True,
+            "tools_used": ["end_call"]
+        }
+        await asyncio.to_thread(_update_state, self.call_id, payload)
         logger.info(f"Ending call: {goodbye_message}")
         return "سيتم إنهاء المكالمة الآن."
 

@@ -97,3 +97,29 @@ def get_call_result(call_id: str):
         tools_used=state["tools_used"],
         resolution=state["resolution"] or "call_ended",
     )
+
+from pydantic import BaseModel
+class StateUpdateRequest(BaseModel):
+    resolution: str | None = None
+    sentiment: str | None = None
+    tools_used: list[str] | None = None
+    ended: bool | None = None
+
+@router.post("/internal/state/{call_id}")
+def update_internal_state(call_id: str, update: StateUpdateRequest):
+    state = get_state(call_id)
+    if not state:
+        return {"status": "error", "message": "Call state not found"}
+    
+    if update.resolution is not None:
+        state["resolution"] = update.resolution
+    if update.sentiment is not None:
+        state["sentiment"] = update.sentiment
+    if update.tools_used is not None:
+        for t in update.tools_used:
+            if t not in state["tools_used"]:
+                state["tools_used"].append(t)
+    if update.ended is not None:
+        state["ended"] = update.ended
+
+    return {"status": "ok"}
