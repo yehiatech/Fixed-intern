@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD
 
 on:
   push:
@@ -24,3 +24,25 @@ jobs:
           # pip install -r call-orchestrator/requirements.txt
           echo "Running pytest..."
           # pytest
+
+  deploy:
+    name: Deploy to AWS EC2
+    needs: test
+    runs-on: ubuntu-latest
+    # Only deploy on direct push or merge to dev, not on PRs
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+
+    steps:
+      - name: SSH into EC2 & Deploy Docker
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Navigate to the correct folder
+            cd /home/ubuntu/Fixed-intern
+            # Pull the latest dev code
+            git pull origin dev
+            # Restart the containers
+            sudo docker compose -f docker-compose-dev.yml up -d --build
