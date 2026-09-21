@@ -12,7 +12,7 @@ import time
 import uuid
 
 from fastapi import APIRouter
-from twilio.rest import Client as TwilioClient
+
 
 from app.bedrock_client import is_dev_mode
 from app.config import get_settings
@@ -30,16 +30,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/calls", tags=["calls"])
 
 
+import os
+from livekit.api import AccessToken, VideoGrants
+
 @router.post("/trigger", response_model=CallTriggerResponse, status_code=202)
 def trigger_call(payload: CallTriggerRequest) -> CallTriggerResponse:
-    if not payload.customer_phone.startswith("+"):
-        raise APIError(
-            status_code=400,
-            error="invalid_phone_number",
-            message="The phone number format is invalid. Must start with +",
-            call_id=payload.call_id,
-        )
-
     if exists(payload.call_id):
         raise APIError(
             status_code=409,
@@ -56,32 +51,26 @@ def trigger_call(payload: CallTriggerRequest) -> CallTriggerResponse:
     )
 
     settings = get_settings()
-    twilio_sid: str
+    
+    # Generate LiveKit Token for the Dashlet to join
+    room_name = f"call_{payload.call_id}"
+    identity = "employee_agent"
+    
+    token = AccessToken(
+        settings.livekit_api_key or "devkey",
+        settings.livekit_api_secret or "secret"
+    ).with_identity(identity) \
+     .with_name("CRM Employee") \
+     .with_grants(VideoGrants(room_join=True, room=room_name)) \
+     .to_jwt()
 
-    if is_dev_mode() or not settings.public_base_url:
-        # Local/dev testing: no real Twilio call placed. Use
-        # /voice/incoming/{call_id} yourself via curl to simulate it.
-        twilio_sid = f"CA{uuid.uuid4().hex}"
-        logger.info(
-            "DEV_MODE: trigger_call accepted (no real call placed) call_id=%s org_id=%s",
-            payload.call_id,
-            payload.org_id,
-        )
-    else:
-        client = TwilioClient(settings.twilio_account_sid, settings.twilio_auth_token)
-        call = client.calls.create(
-            url=f"{settings.public_base_url}/voice/incoming/{payload.call_id}",
-            to=payload.customer_phone,
-            from_=settings.twilio_phone_number,
-        )
-        twilio_sid = call.sid
-        logger.info("Real Twilio call placed for call_id=%s sid=%s", payload.call_id, twilio_sid)
+    logger.info("Generated LiveKit token for call_id=%s room=%s", payload.call_id, room_name)
 
     return CallTriggerResponse(
         status="accepted",
         call_id=payload.call_id,
-        twilio_sid=twilio_sid,
-        message="Call initiated",
+        twilio_sid=token, # Reusing schema field temporarily to hold token
+        message="LiveKit Room Created",
     )
 
 
