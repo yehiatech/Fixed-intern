@@ -1,9 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Literal
 
 from ingestion import ingest_pdf
-from chat import handle_chat
+from chat import handle_chat, submit_feedback
 
 app = FastAPI(
     title="Arabic RAG Chatbot Microservice",
@@ -30,6 +30,10 @@ class IngestRequest(BaseModel):
     organization_id: str
     file_path: str
 
+class FeedbackRequest(BaseModel):
+    interaction_id: str
+    rating: Literal["up", "down"]
+
 # Chat Endpoint (T-17: Topic Guard + Bedrock tool calling + citations)
 @app.post("/chat")
 def chat(request: ChatRequest):
@@ -49,3 +53,14 @@ def ingest(request: IngestRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     return {"message": "ingested", **result}
+
+# Feedback Endpoint (FEN-7: thumbs up/down per query-response pair)
+@app.post("/feedback")
+def feedback(request: FeedbackRequest):
+    try:
+        result = submit_feedback(request.interaction_id, request.rating)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"message": "feedback recorded", **result}
