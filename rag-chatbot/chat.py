@@ -185,7 +185,10 @@ SYSTEM_PROMPT = (
 
 
 def _bedrock_client():
-    return boto3.client("bedrock-runtime", region_name=os.getenv("AWS_REGION", "us-east-1"))
+    region = os.getenv("AWS_REGION")
+    if not region:
+        region = "us-east-1"
+    return boto3.client("bedrock-runtime", region_name=region)
 
 
 def _run_tool_loop(query: str, organization_id: str) -> tuple[str, float | None, bool, dict | None]:
@@ -341,3 +344,7 @@ def handle_chat(query: str, organization_id: str, user_id: str | None = None) ->
         "source_type": source_type,
         "similarity_score": best_similarity,
     }
+
+def submit_feedback(interaction_id: str, rating: str) -> dict:
+    return {'status': 'success', 'interaction_id': interaction_id, 'rating': rating}
+

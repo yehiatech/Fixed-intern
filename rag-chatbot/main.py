@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Literal
 
@@ -8,6 +9,15 @@ from chat import handle_chat, submit_feedback
 app = FastAPI(
     title="Arabic RAG Chatbot Microservice",
     version="0.1.0"
+)
+
+# Add CORS Middleware to allow requests from the chat widget
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
 )
 
 # Root Endpoint
