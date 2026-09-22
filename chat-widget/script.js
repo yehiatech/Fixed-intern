@@ -29,20 +29,34 @@ document.addEventListener("DOMContentLoaded", () => {
         loadingIndicator.classList.remove("hidden");
         scrollToBottom();
 
-        // 3. Fake API Call Delay (Mocking the POST /chat endpoint)
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // 3. Make Real API Call to Backend
+        try {
+            const response = await fetch("http://localhost:8002/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    organization_id: "00000000-0000-0000-0000-000000000000",
+                    query: text
+                })
+            });
 
-        // 4. Fake AI Response
-        const fakeResponses = [
-            "لقد بحثت في قاعدة المعرفة، سياسة الإجازات تسمح بـ 21 يوم سنوياً.",
-            "هل يمكنك توضيح سؤالك أكثر؟",
-            "بناءً على دليل الموظف، يرجى التواصل مع قسم الموارد البشرية للحصول على النموذج.",
-            "تم تسجيل طلبك بنجاح، هل هناك أي شيء آخر يمكنني مساعدتك به؟"
-        ];
-        const randomResponse = fakeResponses[Math.floor(Math.random() * fakeResponses.length)];
-        
-        loadingIndicator.classList.add("hidden");
-        appendMessage("ai", randomResponse);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            // Backend returns { answer: "ai text..." } based on chat.py
+            const aiText = data.answer || data.response || data.message || data.text || "No response received";
+            
+            loadingIndicator.classList.add("hidden");
+            appendMessage("ai", aiText);
+        } catch (error) {
+            console.error("Chat API error:", error);
+            loadingIndicator.classList.add("hidden");
+            appendMessage("ai", "Sorry, an error occurred while connecting to the server."); 
+        }
     };
 
     // Send on Button Click
