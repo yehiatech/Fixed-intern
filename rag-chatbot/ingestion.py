@@ -1,4 +1,3 @@
-
 import os
 import json
 import uuid
@@ -45,11 +44,40 @@ def _fix_arabic(text: str) -> str:
 
 
 def extract_pages(file_path: str) -> list[dict]:
+    """
+    Extracts page text from a PDF.
+
+    Word order *within* each text block/line coming out of pymupdf is
+    correct (pymupdf handles Arabic shaping/word order fine on its own).
+    The actual problem observed in this project's PDFs is *block-level*
+    ordering: pymupdf's default extraction can emit separate text blocks
+    (paragraphs) in content-stream order rather than visual top-to-bottom
+    order, which swaps whole sentences/paragraphs relative to each other.
+
+    This function extracts blocks explicitly via get_text("blocks") and
+    re-sorts them by their vertical position (y0) then horizontal position
+    (x0), so blocks come out top-to-bottom as a reader would expect,
+    without touching the (already-correct) word order inside each block.
+
+    NOTE: earlier versions of this function manually reordered *words*
+    within lines (by x-coordinate, or via pymupdf's `sort=True` text mode).
+    Both made results worse, because the real issue was never word order
+    within a line/block -- it was the order blocks were emitted in.
+    """
     doc = pymupdf.open(file_path)
     pages = []
 
     for i, page in enumerate(doc):
-        text = _fix_arabic(page.get_text("text"))
+        # each block: (x0, y0, x1, y1, text, block_no, block_type)
+        blocks = page.get_text("blocks")
+
+        # keep only real text blocks (block_type == 0), drop images etc.
+        text_blocks = [b for b in blocks if b[6] == 0 and b[4].strip()]
+
+        # sort top-to-bottom, then left-to-right within the same line band
+        text_blocks.sort(key=lambda b: (round(b[1], 1), b[0]))
+
+        text = _fix_arabic("\n".join(b[4] for b in text_blocks))
 
         if text:
             pages.append({
@@ -237,38 +265,11 @@ def search_chunks(
     finally:
         conn.close()
 
-    query_normalized = _fix_arabic(query).lower()
-
     output = []
 
     for row in results:
         chunk_text = row[2]
-        chunk_normalized = _fix_arabic(chunk_text).lower()
-
-        semantic_score = float(row[3])
-
-        keyword_score = 0.0
-
-        important_terms = [
-            "السحب",
-            "اليومي",
-            "المعاملات",
-            "فودافون كاش",
-            "60000",
-            "60,000",
-            "الحد الأقصى",
-        ]
-
-        matched_terms = sum(
-            1
-            for term in important_terms
-            if term in query_normalized and term in chunk_normalized
-        )
-
-        if matched_terms:
-          keyword_score = min(matched_terms * 0.20, 0.75)
-
-        similarity = min(semantic_score + keyword_score, 1.0)
+        similarity = float(row[3])
 
         output.append({
             "source_file": row[0],
@@ -280,5 +281,3 @@ def search_chunks(
     output.sort(key=lambda x: x["similarity"], reverse=True)
 
     return output
-
-

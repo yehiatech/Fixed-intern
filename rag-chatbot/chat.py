@@ -25,7 +25,7 @@ from db import get_connection
 from ingestion import search_chunks
 
 CHAT_MODEL_ID = os.getenv("CHAT_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
-CITATION_THRESHOLD = 0.75
+CITATION_THRESHOLD = 0.35
 MAX_TOOL_ITERATIONS = 5
 
 HARMFUL_KEYWORDS = [
