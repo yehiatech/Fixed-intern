@@ -56,50 +56,7 @@
                     </thead>
                     <tbody id="orgTableBody" class="bg-white divide-y divide-gray-200">
                         
-                        <!-- Row 1 -->
-                        <tr>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="text-sm font-bold text-gray-900 org-name-cell">Acme Corporation</div>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap status-cell" data-status="Active">
-                                <span class="px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full bg-green-100 text-green-800">Active</span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Sep 20, 2026</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <button class="text-[#177a94] hover:text-[#126379] mr-4 btn-manage">Manage</button>
-                                <button class="text-red-500 hover:text-red-700 btn-delete">Delete</button>
-                            </td>
-                        </tr>
-
-                        <!-- Row 2 -->
-                        <tr>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="text-sm font-bold text-gray-900 org-name-cell">Global Telecom</div>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap status-cell" data-status="Active">
-                                <span class="px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full bg-green-100 text-green-800">Active</span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Sep 22, 2026</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <button class="text-[#177a94] hover:text-[#126379] mr-4 btn-manage">Manage</button>
-                                <button class="text-red-500 hover:text-red-700 btn-delete">Delete</button>
-                            </td>
-                        </tr>
-
-                        <!-- Row 3 -->
-                        <tr>
-                            <td class="px-6 py-4 whitespace-nowrap">
-                                <div class="text-sm font-bold text-gray-900 org-name-cell">Startup Hub</div>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap status-cell" data-status="Suspended">
-                                <span class="px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full bg-red-100 text-red-800">Suspended</span>
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Sep 23, 2026</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <button class="text-[#177a94] hover:text-[#126379] mr-4 btn-manage">Manage</button>
-                                <button class="text-red-500 hover:text-red-700 btn-delete">Delete</button>
-                            </td>
-                        </tr>
+                        <!-- Rows will be populated by JS -->
 
                     </tbody>
                 </table>
@@ -114,19 +71,22 @@
                 <h3 class="text-xl font-bold text-gray-900">Create Organization</h3>
                 <p class="text-sm text-gray-500 mt-1">Add a new company to the system.</p>
             </div>
-            <form id="createForm">
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Organization Name</label>
-                    <input type="text" id="orgName" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#177a94] focus:ring-1 focus:ring-[#177a94]" required>
-                </div>
-                <div class="mb-6">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                    <select id="orgStatus" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#177a94] focus:ring-1 focus:ring-[#177a94]">
-                        <option value="Active">Active</option>
-                        <option value="Suspended">Suspended</option>
-                    </select>
-                </div>
-                <div class="flex justify-end gap-3">
+            
+              <form id="createForm">
+                  <div class="mb-4">
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Organization Name</label>
+                      <input type="text" id="orgName" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#177a94] focus:ring-1 focus:ring-[#177a94]" required>
+                  </div>
+                  <div class="mb-4 border-t border-gray-200 pt-4">
+                      <h4 class="text-xs font-bold text-gray-500 uppercase mb-3">Initial Administrator</h4>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Admin Username</label>
+                      <input type="text" id="orgAdminUser" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#177a94] focus:ring-1 focus:ring-[#177a94]" required>
+                  </div>
+                  <div class="mb-6">
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Admin Password</label>
+                      <input type="password" id="orgAdminPass" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#177a94] focus:ring-1 focus:ring-[#177a94]" required>
+                  </div>
+                  <div class="flex justify-end gap-3">
                     <button type="button" id="closeModal" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium text-sm">Cancel</button>
                     <button type="submit" class="px-4 py-2 bg-[#177a94] text-white rounded-lg hover:bg-[#126379] font-medium text-sm shadow-sm">Save</button>
                 </div>
@@ -183,8 +143,62 @@
         </div>
     </div>
 
+    
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 hidden flex items-center justify-center z-50 backdrop-blur-sm transition-opacity">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 transform transition-all scale-100">
+            <div class="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
+                <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            </div>
+            <h3 class="text-lg font-bold text-center text-gray-900 mb-2">Delete Organization</h3>
+            <p class="text-sm text-center text-gray-500 mb-6">Are you sure you want to permanently delete this organization? All of its data will be permanently removed. This action cannot be undone.</p>
+            <div class="flex flex-row gap-3 justify-center">
+                <button id="cancelDeleteBtn" type="button" class="flex-1 px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-200 transition-colors">Cancel</button>
+                <button id="confirmDeleteBtn" type="button" class="flex-1 px-4 py-2.5 bg-red-600 border border-transparent rounded-lg text-sm font-semibold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors shadow-sm">Delete</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+
+            // --- Delete Modal Logic ---
+            const deleteModal = document.getElementById('deleteModal');
+            const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+            const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+            let rowToDelete = null;
+
+            if(cancelDeleteBtn) {
+                cancelDeleteBtn.addEventListener('click', () => {
+                    deleteModal.classList.add('hidden');
+                    rowToDelete = null;
+                });
+            }
+
+            if(confirmDeleteBtn) {
+                confirmDeleteBtn.addEventListener('click', async () => {
+                    if (rowToDelete) {
+                        const orgId = rowToDelete.dataset.id;
+                        try {
+                            const response = await fetch('http://localhost:8002/api/organizations/' + orgId, {
+                                method: 'DELETE'
+                            });
+                            if (response.ok) {
+                                rowToDelete.remove();
+                                rowToDelete = null;
+                                if (typeof showToast !== "undefined") showToast("Organization deleted successfully.", "success");
+                            } else {
+                                if (typeof showToast !== "undefined") showToast("Failed to delete organization.", "error");
+                            }
+                        } catch (e) {
+                            console.error(e);
+                            if (typeof showToast !== "undefined") showToast("Error deleting organization.", "error");
+                        }
+                    }
+                    deleteModal.classList.add('hidden');
+                });
+            }
+
             // -- Create Modal Elements --
             const createModal = document.getElementById('createModal');
             const createBtn = document.getElementById('createBtn');
@@ -213,28 +227,49 @@
             createBtn.addEventListener('click', () => createModal.classList.remove('hidden'));
             closeBtn.addEventListener('click', () => { createModal.classList.add('hidden'); createForm.reset(); });
             
-            createForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const name = document.getElementById('orgName').value;
-                const status = document.getElementById('orgStatus').value;
-                const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                
-                const newRow = document.createElement('tr');
-                newRow.innerHTML = `
-                    <td class="px-6 py-4 whitespace-nowrap"><div class="text-sm font-bold text-gray-900 org-name-cell">${name}</div></td>
-                    <td class="px-6 py-4 whitespace-nowrap status-cell" data-status="${status}">${getStatusBadge(status)}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${date}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button class="text-[#177a94] hover:text-[#126379] mr-4 btn-manage">Manage</button>
-                        <button class="text-red-500 hover:text-red-700 btn-delete">Delete</button>
-                    </td>
-                `;
-
-                tableBody.prepend(newRow);
-                createModal.classList.add('hidden');
-                createForm.reset();
-                attachRowListeners(newRow);
-            });
+            createForm.addEventListener('submit', async (e) => {
+                  e.preventDefault();
+                  const name = document.getElementById('orgName').value;
+                  const adminUser = document.getElementById('orgAdminUser').value;
+                  const adminPass = document.getElementById('orgAdminPass').value;
+                  
+                  try {
+                      // 1. Create Organization
+                      const orgRes = await fetch('http://localhost:8002/organizations', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ name: name })
+                      });
+                      
+                      if (!orgRes.ok) throw new Error("Failed to create organization");
+                      const orgData = await orgRes.json();
+                      
+                      // 2. Create Admin User
+                      const userRes = await fetch('http://localhost:8002/users', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                              username: adminUser,
+                              password: adminPass,
+                              role: 'org_admin',
+                              organization_id: orgData.id
+                          })
+                      });
+                      
+                      if (!userRes.ok) throw new Error("Failed to create admin user");
+                      
+                      showToast("Organization and Admin created successfully!", "success");
+                      createModal.classList.add('hidden');
+                      createForm.reset();
+                      
+                      // Reload the table
+                      location.reload(); 
+                      
+                  } catch (error) {
+                      console.error(error);
+                      showToast(error.message || "An error occurred", "error");
+                  }
+              });
 
             // --- Manage Modal Logic ---
             closeManageBtn.addEventListener('click', () => {
@@ -242,13 +277,30 @@
             });
 
             // Update Status of Organization
-            updateStatusBtn.addEventListener('click', () => {
+            updateStatusBtn.addEventListener('click', async () => {
                 if(currentRowToManage) {
                     const newStatus = editOrgStatus.value;
-                    const statusCell = currentRowToManage.querySelector('.status-cell');
-                    statusCell.setAttribute('data-status', newStatus);
-                    statusCell.innerHTML = getStatusBadge(newStatus);
-                    alert("Organization status updated successfully.");
+                    const orgId = currentRowToManage.dataset.id;
+                    
+                    try {
+                        const response = await fetch('http://localhost:8002/api/organizations/' + orgId + '/status', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ status: newStatus })
+                        });
+                        
+                        if (response.ok) {
+                            const statusCell = currentRowToManage.querySelector('.status-cell');
+                            statusCell.setAttribute('data-status', newStatus);
+                            statusCell.innerHTML = getStatusBadge(newStatus);
+                            if (typeof showToast !== "undefined") showToast("Organization status updated successfully.", "success");
+                        } else {
+                            if (typeof showToast !== "undefined") showToast("Failed to update status.", "error");
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        if (typeof showToast !== "undefined") showToast("An error occurred.", "error");
+                    }
                 }
             });
 
@@ -266,7 +318,7 @@
                 li.className = "flex justify-between items-center p-2 bg-white border border-gray-200 rounded-md text-sm";
                 li.innerHTML = `
                     <span class="font-medium text-gray-800">${username}</span>
-                    <button class="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 btn-remove-admin">Remove</button>
+                    <button type="button" class="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 btn-remove-admin">Remove</button>
                 `;
                 li.querySelector('.btn-remove-admin').addEventListener('click', () => {
                     if (confirm(`Remove admin ${username}?`)) li.remove();
@@ -274,10 +326,8 @@
                 adminList.appendChild(li);
             }
 
-            // Mock Data Generator for Admins
             function populateMockAdmins() {
                 adminList.innerHTML = '';
-                // Generate 1-2 random mock admins for demo
                 addAdminToUI("super_admin");
                 if (Math.random() > 0.5) addAdminToUI("manager_account");
             }
@@ -286,7 +336,8 @@
             function attachRowListeners(row) {
                 // Delete
                 row.querySelector('.btn-delete').addEventListener('click', () => {
-                    if (confirm(`Permanently delete this organization?`)) row.remove();
+                    rowToDelete = row;
+                    deleteModal.classList.remove('hidden');
                 });
                 
                 // Manage
@@ -306,8 +357,77 @@
                 });
             }
 
-            document.querySelectorAll('tbody tr').forEach(attachRowListeners);
+            async function fetchOrganizations() {
+                try {
+                    const response = await fetch('http://localhost:8002/api/organizations');
+                    if (response.ok) {
+                        const data = await response.json();
+                        tableBody.innerHTML = '';
+                        data.organizations.forEach(org => {
+                            const tr = document.createElement('tr');
+                            tr.dataset.id = org.id;
+                            
+                            const status = org.status || "Active";
+                            const name = org.name;
+                            const createdDate = org.created_at ? new Date(org.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                            
+                            tr.innerHTML = `
+                                <td class="px-6 py-4 whitespace-nowrap"><div class="text-sm font-bold text-gray-900 org-name-cell">${name}</div></td>
+                                <td class="px-6 py-4 whitespace-nowrap status-cell" data-status="${status}">${getStatusBadge(status)}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${createdDate}</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <button class="text-[#177a94] hover:text-[#126379] mr-4 btn-manage">Manage</button>
+                                    <button class="text-red-500 hover:text-red-700 btn-delete">Delete</button>
+                                </td>
+                            `;
+                            tableBody.appendChild(tr);
+                            attachRowListeners(tr);
+                        });
+                    }
+                } catch (error) {
+                    console.error("Error fetching organizations:", error);
+                }
+            }
+            
+            fetchOrganizations();
         });
     </script>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-3"></div>
+
+    <!-- Toast Logic -->
+    <script>
+        function showToast(message, type="success") {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+            const toast = document.createElement('div');
+            
+            let bgColor = type === 'success' ? 'bg-green-50' : 'bg-red-50';
+            let textColor = type === 'success' ? 'text-green-800' : 'text-red-800';
+            let borderColor = type === 'success' ? 'border-green-200' : 'border-red-200';
+            let icon = type === 'success' ? 
+                '<svg class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>' : 
+                '<svg class="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>';
+
+            toast.className = `flex items-center gap-3 px-4 py-3 rounded-xl border ${bgColor} ${textColor} ${borderColor} shadow-lg transition-all duration-300 transform translate-y-4 opacity-0`;
+            toast.innerHTML = `${icon}<span class="text-sm font-semibold">${message}</span>`;
+            
+            container.appendChild(toast);
+            
+            // Animate in
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    toast.classList.remove('translate-y-4', 'opacity-0');
+                });
+            });
+            
+            // Animate out and remove
+            setTimeout(() => {
+                toast.classList.add('translate-y-4', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    </script>
+
 </body>
-</html>

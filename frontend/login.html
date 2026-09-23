@@ -19,7 +19,7 @@
             <h2 class="text-2xl font-bold text-[#177a94]">Login</h2>
         </div>
         
-        <form class="space-y-6">
+        <form id="loginForm" class="space-y-6">
             <div>
                 <label for="username" class="block text-sm font-medium mb-2">Username</label>
                 <input type="text" id="username" class="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:border-[#177a94] focus:ring-1 focus:ring-[#177a94]" placeholder="Enter your username" required>
@@ -38,5 +38,42 @@
         </form>
     </div>
 
+
+<script>
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const username = document.getElementById('username').value;
+        
+        try {
+            const response = await fetch('http://localhost:8002/api/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                localStorage.setItem('role', data.role);
+                localStorage.setItem('organization_id', data.organization_id);
+                
+                if (data.role === 'super_admin' || data.role === 'superadmin') {
+                    window.location.href = 'organizations.html';
+                } else if (data.role === 'agent') {
+                    window.location.href = 'agent_workspace.html';
+                } else {
+                    window.location.href = 'org_admin.html';
+                }
+            } else {
+                alert('Login failed. Please check your username.');
+            }
+        } catch (error) {
+            console.error('Login error:', error);
+            alert('An error occurred. Please try again later.');
+        }
+    });
+</script>
 </body>
+
 </html>
