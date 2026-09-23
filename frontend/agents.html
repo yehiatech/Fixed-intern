@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agents Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: Arial, Helvetica, sans-serif; background-color: #f5f6f8; }
+    </style>
+</head>
+<body class="antialiased flex flex-col min-h-screen">
+    
+    <!-- Top Navbar -->
+    <nav class="bg-white shadow-sm border-b border-gray-200 z-10">
+        <div class="px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center">
+                    <span class="text-xl font-bold text-[#177a94]">Acme Corp Workspace</span>
+                    <span class="ml-4 px-2 py-1 bg-blue-50 text-xs font-semibold text-blue-700 rounded border border-blue-200">Org Admin</span>
+                </div>
+                <div class="flex items-center space-x-6">
+                    <a href="org_admin.html" class="text-sm font-medium text-gray-500 hover:text-[#177a94] transition-colors">Tickets Dashboard</a>
+                    <a href="#" class="text-sm font-bold text-[#177a94] border-b-2 border-[#177a94] pb-5 mt-5">Agents Management</a>
+                    <div class="h-4 w-px bg-gray-300"></div>
+                    <a href="login.html" class="text-sm text-gray-400 hover:text-red-600 transition-colors">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto w-full">
+        
+        <!-- Header & Controls -->
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Agents Directory</h1>
+                <p class="text-sm text-gray-500 mt-1">Manage support agents, view their workload, and onboard new staff.</p>
+            </div>
+            <button id="addAgentBtn" class="bg-[#177a94] hover:bg-[#126379] text-white px-5 py-2.5 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
+                Add New Agent
+            </button>
+        </div>
+
+        <!-- Agents Table Card -->
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agent Details</th>
+                            <th scope="col" class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th scope="col" class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Active Tickets</th>
+                            <th scope="col" class="px-6 py-4 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="agentsTableBody" class="bg-white divide-y divide-gray-200">
+                      </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add Agent Modal -->
+    <div id="agentModal" class="fixed inset-0 bg-gray-900 bg-opacity-60 overflow-y-auto h-full w-full hidden z-50 flex items-center justify-center">
+        <div class="relative p-6 border w-[450px] shadow-2xl rounded-xl bg-white">
+            <h3 class="text-xl font-bold text-gray-900 mb-1">Add New Agent</h3>
+            <p class="text-sm text-gray-500 mb-5">Create a new support agent account.</p>
+            
+            <form id="agentForm">
+                <div class="mb-4">
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Full Name</label>
+                    <input type="text" id="aName" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#177a94]" placeholder="e.g. Alex Johnson" required>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Username</label>
+                    <input type="text" id="aUsername" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#177a94]" placeholder="e.g. @alexj" required>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Temporary Password</label>
+                    <input type="password" id="aPassword" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#177a94]" placeholder="••••••••" required>
+                </div>
+                <div class="flex justify-end gap-3">
+                    <button type="button" id="closeAgentModal" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium text-sm">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-[#177a94] text-white rounded-lg hover:bg-[#126379] font-medium text-sm shadow-sm">Create Agent</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const agentModal = document.getElementById('agentModal');
+            const agentForm = document.getElementById('agentForm');
+            const agentsTableBody = document.getElementById('agentsTableBody');
+
+            // Open/Close Modal
+            document.getElementById('addAgentBtn').addEventListener('click', () => agentModal.classList.remove('hidden'));
+            document.getElementById('closeAgentModal').addEventListener('click', () => {
+                agentModal.classList.add('hidden');
+                agentForm.reset();
+            });
+
+            // Get initials for Avatar
+            function getInitials(name) {
+                return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+            }
+
+            // Handle Add Agent Form Submit
+            agentForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const name = document.getElementById('aName').value.trim();
+                const username = document.getElementById('aUsername').value.trim();
+                const initials = getInitials(name);
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 h-10 w-10 bg-[#177a94] text-white rounded-full flex items-center justify-center font-bold">
+                                ${initials}
+                            </div>
+                            <div class="ml-4">
+                                <div class="text-sm font-medium text-gray-900 agent-name">${name}</div>
+                                <div class="text-sm text-gray-500">${username.startsWith('@') ? username : '@'+username}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">Offline</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        0 Assigned
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button class="text-red-600 hover:text-red-900 btn-remove">Remove</button>
+                    </td>
+                `;
+                
+                attachRemoveListener(tr);
+                agentsTableBody.appendChild(tr);
+                
+                agentModal.classList.add('hidden');
+                agentForm.reset();
+            });
+
+            // Handle Row Removal
+            function attachRemoveListener(row) {
+                row.querySelector('.btn-remove').addEventListener('click', () => {
+                    const agentName = row.querySelector('.agent-name').innerText;
+                    if(confirm(`Are you sure you want to remove agent "${agentName}"?`)) {
+                        row.remove();
+                    }
+                });
+            }
+
+            // Attach to existing rows
+            document.querySelectorAll('tbody tr').forEach(attachRemoveListener);
+        });
+    </script>
+</body>
+</html>
+

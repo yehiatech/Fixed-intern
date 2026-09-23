@@ -1,7 +1,9 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Literal
+import os
+import shutil
 
 from ingestion import ingest_pdf
 from chat import handle_chat, submit_feedback
@@ -35,6 +37,7 @@ class ChatRequest(BaseModel):
     organization_id: str
     user_id: Optional[str] = None
     query: str
+    history: list[dict] = []
 
 class IngestRequest(BaseModel):
     organization_id: str
@@ -44,16 +47,16 @@ class FeedbackRequest(BaseModel):
     interaction_id: str
     rating: Literal["up", "down"]
 
-# Chat Endpoint (T-17: Topic Guard + Bedrock tool calling + citations)
+# Chat Endpoint
 @app.post("/chat")
 def chat(request: ChatRequest):
     try:
-        result = handle_chat(request.query, request.organization_id, request.user_id)
+        result = handle_chat(request.query, request.organization_id, request.user_id, request.history)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     return result
 
-# Ingest Endpoint (T-16: real PDF -> chunk -> embed -> pgvector pipeline)
+# Original Ingest Endpoint
 @app.post("/ingest")
 def ingest(request: IngestRequest):
     try:
@@ -64,7 +67,30 @@ def ingest(request: IngestRequest):
         raise HTTPException(status_code=500, detail=str(e))
     return {"message": "ingested", **result}
 
-# Feedback Endpoint (FEN-7: thumbs up/down per query-response pair)
+# NEW: File Upload Endpoint
+@app.post("/upload")
+async def upload_pdf(organization_id: str = Form(...), file: UploadFile = File(...)):
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+    
+    # Save the file temporarily
+    temp_file_path = f"/tmp/{file.filename}"
+    os.makedirs("/tmp", exist_ok=True)
+    with open(temp_file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    # Run ingestion
+    try:
+        result = ingest_pdf(temp_file_path, organization_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if os.path.exists(temp_file_path):
+            os.remove(temp_file_path)
+            
+    return {"message": "file uploaded and ingested", "filename": file.filename, **result}
+
+# Feedback Endpoint
 @app.post("/feedback")
 def feedback(request: FeedbackRequest):
     try:
