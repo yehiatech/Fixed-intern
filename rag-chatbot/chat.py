@@ -94,15 +94,37 @@ def _tool_check_order_status(tool_input: dict, organization_id: str) -> dict:
     return {"available": False, "message": "خدمة تتبع الطلبات غير متاحة حاليًا."}
 
 
-def _tool_escalate_to_human(tool_input: dict, organization_id: str) -> dict:
-    return {"escalated": True, "message": "تم تصعيد هذه المحادثة لمراجعة أحد موظفي الدعم البشري."}
+def _tool_create_ticket(tool_input: dict, organization_id: str) -> dict:
+    import random
+    name = tool_input.get("customer_name", "Unknown")
+    phone = tool_input.get("phone_number", "Unknown")
+    desc = tool_input.get("issue_description", "Unknown")
+
+    # Force the AI to ask the user if they hallucinated a generic response
+    generic_words = ["unknown", "escalation", "none", "n/a", "غير معروف", "طلب التحدث لموظف", "التحدث مع الدعم", "لا يوجد", "لم يحدد", "مجهول"]
+    is_generic = any(w in desc.lower() for w in generic_words)
+    if is_generic or len(desc) < 4:
+        return {
+            "error": "TICKET CREATION FAILED. You provided a missing or placeholder issue_description. You MUST explicitly ask the user 'What is the problem/issue you are facing?' and wait for their response before trying again."
+        }
+
+    ticket_id = f"TCK-{random.randint(1000, 9999)}"
+    
+    return {
+        "success": True,
+        "ticket_id": ticket_id,
+        "message": f"Successfully created ticket {ticket_id} for {name} ({phone})."
+    }
+
+
 
 
 TOOL_FUNCTIONS = {
     "search_knowledge_base": _tool_search_knowledge_base,
     "lookup_ticket": _tool_lookup_ticket,
     "check_order_status": _tool_check_order_status,
-    "escalate_to_human": _tool_escalate_to_human,
+    "create_ticket": _tool_create_ticket,
+    
 }
 
 TOOL_CONFIG = {
@@ -154,36 +176,44 @@ TOOL_CONFIG = {
         },
         {
             "toolSpec": {
-                "name": "escalate_to_human",
-                "description": "Flag the current conversation for review by a human agent.",
+                "name": "create_ticket",
+                "description": "Create a new support ticket. You MUST explicitly collect the issue_description from the user. Do NOT invent, guess, or use placeholders for the issue.",
                 "inputSchema": {
                     "json": {
                         "type": "object",
                         "properties": {
-                            "reason": {"type": "string", "description": "Why this needs human review."}
+                            "customer_name": {"type": "string"},
+                            "phone_number": {"type": "string"},
+                            "issue_description": {"type": "string"}
                         },
-                        "required": ["reason"],
+                        "required": ["customer_name", "phone_number", "issue_description"],
                     }
                 },
             }
         },
+        
     ]
 }
 
-SYSTEM_PROMPT = """أنت مساعد ذكي وودود لخدمة العملاء. هدفك هو تقديم تجربة استثنائية وسريعة للعملاء.
+SYSTEM_PROMPT = """أنت مساعد ذكي لخدمة العملاء. هدفك هو تقديم إجابات استباقية وسريعة للعملاء.
 
 تعليمات الشخصية والأسلوب (Persona & Tone):
-1. النبرة: كن ودوداً، مهنياً، ومتعاطفاً. استخدم نبرة دافئة ومرحبة.
-2. التنسيق: اجعل إجاباتك قصيرة ومريحة للعين. استخدم النقاط (Bullet points) للخطوات أو الشروط، وقم بتمييز الكلمات المهمة بخط عريض (**Bold**).
-3. الرموز التعبيرية: استخدم بعض الرموز التعبيرية الاحترافية (مثل 😊، ✅، 🔍، 📞) بشكل معتدل لجعل المحادثة طبيعية.
-4. الشفافية: أنت ذكاء اصطناعي، فلا تتظاهر بأنك إنسان.
+1. النبرة: كن ودوداً ومهنياً.
+2. التنسيق: اجعل إجاباتك قصيرة ومريحة للعين. استخدم النقط (Bullet points) للخطوات، وقم بتمييز الكلمات المهمة بخط عريض (**Bold**).
+3. الرموز التعبيرية: استخدم الرموز التعبيرية بشكل نادر جداً أو لا تستخدمها.
+4. الشفافية: أنت ذكاء اصطناعي، لا تتظاهر بأنك إنسان.
 
-قواعد استرجاع المعلومات (RAG):
+قواعد الاسترجاع من المعلومات والتصعيد (RAG & Escalation):
 1. ابحث دائماً في قاعدة المعرفة باستخدام الأداة (search_knowledge_base) قبل الإجابة على أي سؤال يخص الشركة أو السياسات.
-2. لا تخترع (Hallucinate) أي معلومات من خارج النصوص المسترجعة أبداً. إذا لم تجد الإجابة، اعتذر بلباقة واعرض تحويل العميل إلى موظف بشري باستخدام الأداة (escalate_to_human).
-3. عند تقديم معلومات من قاعدة المعرفة، يمكنك صياغتها بأسلوبك الودود الجديد، لكن حافظ على دقة المعلومات المذكورة.
+2. لا تخترع (Hallucinate) أي معلومات من خارج النصوص المسترجعة أبداً.
+3. عند تقديم معلومات من قاعدة المعرفة، حافظ على دقة المعلومات المرجعية.
+4. **هام جداً للتصعيد وفتح التذاكر**: عندما يطلب المستخدم التحدث إلى موظف بشري أو عندما تقرر أنه بحاجة لدعم بشري، يجب عليك جمع المعلومات التالية أولاً:
+   - الاسم
+   - رقم الهاتف
+   - وصف المشكلة
+   **لا تقم بإنشاء التذكرة أبداً إذا كانت أي من هذه المعلومات مفقودة.** استمر في سؤاله بلباقة عن المعلومات الناقصة. بمجرد توفر المعلومات الثلاثة، استخدم أداة (create_ticket) لإنشاء التذكرة فوراً، ثم أكد له أنه سيتم التواصل معه.
 
-استخدم lookup_ticket أو check_order_status أو escalate_to_human عند الحاجة."""
+استخدم lookup_ticket أو check_order_status أو create_ticket عند الحاجة."""
 
 
 def _bedrock_client():
@@ -193,9 +223,11 @@ def _bedrock_client():
     return boto3.client("bedrock-runtime", region_name=region)
 
 
-def _run_tool_loop(query: str, organization_id: str) -> tuple[str, float | None, bool, dict | None]:
+def _run_tool_loop(query: str, organization_id: str, history: list = None) -> tuple[str, float | None, bool, dict | None]:
+    if history is None:
+        history = []
     client = _bedrock_client()
-    messages = [{"role": "user", "content": [{"text": query}]}]
+    messages = history + [{"role": "user", "content": [{"text": query}]}]
 
     best_kb_similarity = None
     used_kb_tool = False
@@ -286,7 +318,9 @@ def _log_interaction(organization_id, user_id, query_text, answer_text,
         conn.close()
 
 
-def handle_chat(query: str, organization_id: str, user_id: str | None = None) -> dict:
+def handle_chat(query: str, organization_id: str, user_id: str | None = None, history: list = None) -> dict:
+    if history is None:
+        history = []
     start = time.time()
 
     status, reason = topic_guard(query)
@@ -326,7 +360,7 @@ def handle_chat(query: str, organization_id: str, user_id: str | None = None) ->
             used_kb_tool = True
 
     if answer is None:
-        answer, best_similarity, used_kb_tool, best_kb_result = _run_tool_loop(query, organization_id)
+        answer, best_similarity, used_kb_tool, best_kb_result = _run_tool_loop(query, organization_id, history)
 
     if (used_kb_tool and best_similarity is not None
             and best_similarity >= CITATION_THRESHOLD and best_kb_result):

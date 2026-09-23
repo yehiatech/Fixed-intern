@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organization Workspace</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: Arial, Helvetica, sans-serif; background-color: #f5f6f8; }
+        .chat-scroll::-webkit-scrollbar { width: 6px; }
+        .chat-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    </style>
+</head>
+<body class="antialiased flex flex-col h-screen overflow-hidden">
+    
+    <!-- Top Navbar -->
+    <nav class="bg-white shadow-sm border-b border-gray-200 z-10 flex-shrink-0">
+        <div class="px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center">
+                    <span class="text-xl font-bold text-[#177a94]">Acme Corp Workspace</span>
+                    <span class="ml-4 px-2 py-1 bg-blue-50 text-xs font-semibold text-blue-700 rounded border border-blue-200">Org Admin</span>
+                </div>
+                <div class="flex items-center space-x-6">
+                    <a href="agents.html" class="text-sm font-medium text-gray-500 hover:text-[#177a94] transition-colors">Agents Management</a>
+                    <div class="h-4 w-px bg-gray-300"></div>
+                    <a href="login.html" class="text-sm text-gray-400 hover:text-red-600 transition-colors">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Workspace Area -->
+    <main class="flex-1 overflow-hidden p-4 sm:p-6 flex flex-col lg:flex-row gap-6 max-w-[1600px] mx-auto w-full">
+        
+        <!-- LEFT COLUMN: Ticket Management -->
+        <div class="flex-1 flex flex-col min-w-0 bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            
+            <!-- Header -->
+            <div class="p-5 border-b border-gray-200 flex justify-between items-center bg-white flex-shrink-0">
+                <div>
+                    <h2 class="text-lg font-bold text-gray-900">Support Tickets</h2>
+                </div>
+                <button id="newTicketBtn" class="bg-[#177a94] hover:bg-[#126379] text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    Open Ticket
+                </button>
+            </div>
+            
+            <!-- Ticket Table -->
+            <div class="flex-1 overflow-y-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50 sticky top-0 z-10 shadow-sm">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket Details</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assign To Agent</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ticketTableBody" class="bg-white divide-y divide-gray-200">
+                      </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN: Embedded Actual Chatbot -->
+        <div class="w-full lg:w-[400px] flex flex-col bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex-shrink-0 h-[600px] lg:h-auto">
+            
+            <!-- Chat Header (RTL for Arabic Chatbot) -->
+            <div class="bg-[#177a94] p-4 text-white flex items-center justify-between shadow-md z-10" dir="rtl">
+                <div class="flex items-center gap-3">
+                    <div class="bg-white bg-opacity-20 p-2 rounded-full">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+                    </div>
+                    <div>
+                        <h2 class="font-bold leading-tight">المساعد الذكي</h2>
+                        <p class="text-[10px] text-blue-100 uppercase tracking-wider">متصل الآن</p>
+                    </div>
+                </div>
+                <span class="flex h-3 w-3 relative">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500 border-2 border-white"></span>
+                </span>
+            </div>
+            
+            <!-- Chat Messages Area (RTL) -->
+            <div id="chatBox" class="flex-1 p-4 overflow-y-auto chat-scroll bg-[#f5f6f8] flex flex-col gap-4" dir="rtl">
+                
+                <!-- AI Message Initial -->
+                <div class="flex flex-col items-start w-full">
+                    <span class="text-xs text-gray-500 mb-1 mr-1">المساعد الذكي</span>
+                    <div class="bg-white border border-gray-200 px-4 py-2.5 rounded-2xl rounded-tr-sm shadow-sm text-sm text-gray-800 max-w-[85%] leading-relaxed">
+                        مرحباً! أنا المساعد الذكي الخاص بك. كيف يمكنني مساعدتك في استفساراتك اليوم؟
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Loading Indicator -->
+            <div id="loadingIndicator" class="hidden flex gap-1 p-4 justify-center items-center bg-[#f5f6f8]" dir="rtl">
+                <div class="w-2 h-2 bg-[#177a94] rounded-full animate-bounce"></div>
+                <div class="w-2 h-2 bg-[#177a94] rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+                <div class="w-2 h-2 bg-[#177a94] rounded-full animate-bounce" style="animation-delay: 0.4s"></div>
+            </div>
+
+            <!-- Chat Input Area (RTL) -->
+            <div class="p-3 bg-white border-t border-gray-200" dir="rtl">
+                <form id="chatForm" class="flex gap-2 relative items-center">
+                    
+                    <!-- File Upload -->
+                    <input type="file" id="pdfUploadInput" accept=".pdf" class="hidden">
+                    <button type="button" id="uploadBtn" class="text-gray-400 hover:text-[#177a94] transition-colors p-2" title="رفع ملف PDF">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                    </button>
+
+                    <input type="text" id="chatInput" class="flex-1 pr-4 pl-12 py-3 bg-gray-50 border border-gray-300 rounded-full focus:outline-none focus:border-[#177a94] focus:ring-1 focus:ring-[#177a94] text-sm text-right" placeholder="اكتب رسالتك هنا..." required autocomplete="off">
+                    <button type="submit" id="sendBtn" class="absolute left-1 top-1 bottom-1 aspect-square bg-[#177a94] text-white rounded-full hover:bg-[#126379] transition-colors flex items-center justify-center">
+                        <svg class="w-4 h-4 mr-0.5 transform rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <!-- Create Ticket Modal -->
+    <div id="ticketModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50 flex items-center justify-center">
+        <div class="relative p-6 border w-[500px] shadow-xl rounded-xl bg-white">
+            <h3 class="text-xl font-bold text-gray-900 mb-1">Open New Ticket</h3>
+            <p class="text-sm text-gray-500 mb-5">Create a support ticket manually.</p>
+            
+            <form id="ticketForm">
+                <div class="mb-4">
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Customer Name</label>
+                    <input type="text" id="tCustomer" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#177a94]" required>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Subject</label>
+                    <input type="text" id="tSubject" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#177a94]" required>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Assign Initial Agent</label>
+                    <select id="tAgent" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#177a94]">
+                        <option value="">-- Leave Unassigned --</option>
+                        <option value="agent1">Agent: John Smith</option>
+                        <option value="agent2">Agent: Emma Davis</option>
+                    </select>
+                </div>
+                <div class="flex justify-end gap-3">
+                    <button type="button" id="closeTicketModal" class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium text-sm">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-[#177a94] text-white rounded-lg hover:bg-[#126379] font-medium text-sm shadow-sm">Create Ticket</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Ticket Logic ---
+            let ticketCounter = 1043;
+            const ticketModal = document.getElementById('ticketModal');
+            const ticketForm = document.getElementById('ticketForm');
+            const ticketTableBody = document.getElementById('ticketTableBody');
+
+            // Handle status color changes
+            function updateStatusColor(selectEl) {
+                selectEl.classList.remove('bg-red-100', 'text-red-800', 'border-red-200', 'focus:ring-red-500',
+                                          'bg-yellow-100', 'text-yellow-800', 'border-yellow-200', 'focus:ring-yellow-500',
+                                          'bg-green-100', 'text-green-800', 'border-green-200', 'focus:ring-green-500',
+                                          'bg-gray-100', 'text-gray-800', 'border-gray-200', 'focus:ring-gray-500');
+                
+                const val = selectEl.value;
+                if (val === 'open') {
+                    selectEl.classList.add('bg-red-100', 'text-red-800', 'border-red-200', 'focus:ring-red-500');
+                } else if (val === 'in_progress') {
+                    selectEl.classList.add('bg-yellow-100', 'text-yellow-800', 'border-yellow-200', 'focus:ring-yellow-500');
+                } else if (val === 'resolved') {
+                    selectEl.classList.add('bg-green-100', 'text-green-800', 'border-green-200', 'focus:ring-green-500');
+                } else if (val === 'closed') {
+                    selectEl.classList.add('bg-gray-100', 'text-gray-800', 'border-gray-200', 'focus:ring-gray-500');
+                }
+            }
+
+            // Bind existing select elements
+            document.querySelectorAll('.status-select').forEach(sel => {
+                sel.addEventListener('change', (e) => updateStatusColor(e.target));
+            });
+
+            document.getElementById('newTicketBtn').addEventListener('click', () => ticketModal.classList.remove('hidden'));
+            document.getElementById('closeTicketModal').addEventListener('click', () => {
+                ticketModal.classList.add('hidden');
+                ticketForm.reset();
+            });
+
+            ticketForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const customer = document.getElementById('tCustomer').value;
+                const subject = document.getElementById('tSubject').value;
+                const agent = document.getElementById('tAgent').value;
+                const tId = `#TCK-${ticketCounter++}`;
+
+                const unassignedSelected = agent === "" ? "selected" : "";
+                const agent1Selected = agent === "agent1" ? "selected" : "";
+                const agent2Selected = agent === "agent2" ? "selected" : "";
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="px-6 py-4">
+                        <div class="text-sm font-bold text-[#177a94]">${tId}</div>
+                        <div class="text-sm text-gray-900 mt-1">${subject}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${customer}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <select class="status-select text-xs font-semibold rounded-full px-3 py-1 border focus:outline-none focus:ring-1 appearance-none cursor-pointer bg-red-100 text-red-800 border-red-200 focus:ring-red-500 text-center">
+                            <option class="bg-white text-gray-900" value="open" selected>Open</option>
+                            <option class="bg-white text-gray-900" value="in_progress">In Progress</option>
+                            <option class="bg-white text-gray-900" value="resolved">Resolved</option>
+                            <option class="bg-white text-gray-900" value="closed">Closed</option>
+                        </select>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <select class="text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:border-[#177a94] bg-gray-50 hover:bg-white w-full max-w-[200px]">
+                            <option value="" ${unassignedSelected}>-- Unassigned --</option>
+                            <option value="agent1" ${agent1Selected}>Agent: John Smith</option>
+                            <option value="agent2" ${agent2Selected}>Agent: Emma Davis</option>
+                        </select>
+                    </td>
+                `;
+                
+                const newSelect = tr.querySelector('.status-select');
+                newSelect.addEventListener('change', (e) => updateStatusColor(e.target));
+                
+                ticketTableBody.prepend(tr);
+                ticketModal.classList.add('hidden');
+                ticketForm.reset();
+            });
+
+            // --- Real Backend Chatbot Logic ---
+            const chatForm = document.getElementById('chatForm');
+            const chatInput = document.getElementById('chatInput');
+            const chatBox = document.getElementById('chatBox');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+
+            // -- File Upload Logic --
+            const pdfUploadInput = document.getElementById('pdfUploadInput');
+            const uploadBtn = document.getElementById('uploadBtn');
+
+            uploadBtn.addEventListener('click', () => {
+                pdfUploadInput.click();
+            });
+
+            pdfUploadInput.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+                    alert('يرجى اختيار ملف PDF فقط.');
+                    return;
+                }
+
+                // Show processing message
+                appendMessage('user', `📄 جاري رفع الملف: ${file.name}...`);
+                loadingIndicator.classList.remove("hidden");
+                chatBox.scrollTop = chatBox.scrollHeight;
+
+                const formData = new FormData();
+                formData.append("file", file);
+                formData.append("organization_id", "00000000-0000-0000-0000-000000000000");
+
+                try {
+                    const response = await fetch("http://localhost:8002/upload", {
+                        method: "POST",
+                        body: formData
+                    });
+
+                    if (!response.ok) throw new Error("Upload failed");
+                    
+                    const data = await response.json();
+                    loadingIndicator.classList.add("hidden");
+                    appendMessage('ai', `✅ تم رفع الملف بنجاح! يمكنك الآن سؤالي عن محتواه.`);
+                } catch(error) {
+                    console.error("Upload Error:", error);
+                    loadingIndicator.classList.add("hidden");
+                    appendMessage('ai', "❌ عذراً، فشل رفع الملف.");
+                }
+                
+                pdfUploadInput.value = '';
+            });
+
+            function appendMessage(sender, text, interactionId = null) {
+                const messageDiv = document.createElement('div');
+                // RTL Layout adjustments: User is on the left (items-end), AI is on the right (items-start)
+                messageDiv.className = sender === 'user' ? "flex flex-col items-end w-full" : "flex flex-col items-start w-full";
+                
+                if (sender === 'user') {
+                    messageDiv.innerHTML = `
+                        <span class="text-xs text-gray-500 mb-1 ml-1">أنت</span>
+                        <div class="bg-[#177a94] text-white px-4 py-2.5 rounded-2xl rounded-tl-sm shadow-sm text-sm max-w-[85%] text-right leading-relaxed">
+                            ${text}
+                        </div>
+                    `;
+                } else {
+                    let feedbackHtml = '';
+                    if (interactionId) {
+                        feedbackHtml = `
+                            <div class="flex gap-4 mt-2 mr-1 opacity-70 hover:opacity-100 transition-opacity">
+                                <button type="button" class="feedback-btn hover:text-[#177a94] text-lg transition-transform hover:scale-110" data-id="${interactionId}" data-rating="up">👍</button>
+                                <button type="button" class="feedback-btn hover:text-red-500 text-lg transition-transform hover:scale-110" data-id="${interactionId}" data-rating="down">👎</button>
+                            </div>
+                        `;
+                    }
+                    
+                    messageDiv.innerHTML = `
+                        <span class="text-xs text-gray-500 mb-1 mr-1">المساعد الذكي</span>
+                        <div class="bg-white border border-gray-200 px-4 py-2.5 rounded-2xl rounded-tr-sm shadow-sm text-sm text-gray-800 text-right max-w-[85%] leading-relaxed">
+                            ${text}
+                        </div>
+                        ${feedbackHtml}
+                    `;
+                }
+                
+                chatBox.appendChild(messageDiv);
+                chatBox.scrollTop = chatBox.scrollHeight;
+
+                // Bind feedback buttons
+                if (interactionId) {
+                    const btns = messageDiv.querySelectorAll('.feedback-btn');
+                    btns.forEach(btn => {
+                        btn.addEventListener('click', async (e) => {
+                            if(messageDiv.dataset.voted) return; // Allow only one vote per message
+                            messageDiv.dataset.voted = "true";
+                            
+                            const rating = e.currentTarget.getAttribute('data-rating');
+                            
+                            // Visual feedback
+                            btns.forEach(b => {
+                                if (b !== e.currentTarget) b.style.opacity = '0.3';
+                                b.style.cursor = 'default';
+                            });
+
+                            try {
+                                await fetch("http://localhost:8002/feedback", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ interaction_id: interactionId, rating: rating })
+                                });
+                            } catch(err) {
+                                console.error("Feedback error", err);
+                            }
+                        });
+                    });
+                }
+            }
+
+            let chatHistory = [];
+
+            chatForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const text = chatInput.value.trim();
+                if(!text) return;
+
+                // Append user message
+                appendMessage('user', text);
+                chatInput.value = '';
+                
+                // Show loading dots
+                loadingIndicator.classList.remove("hidden");
+                chatBox.scrollTop = chatBox.scrollHeight;
+
+                const historyToSend = [...chatHistory];
+
+                // Send request to localhost:8002/chat
+                try {
+                    const response = await fetch("http://localhost:8002/chat", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            organization_id: "00000000-0000-0000-0000-000000000000",
+                            query: text,
+                            history: historyToSend
+                        })
+                    });
+
+                    if (!response.ok) throw new Error("Server error");
+                    const data = await response.json();
+                    
+                    loadingIndicator.classList.add("hidden");
+                    const aiText = data.answer || data.response || data.message || data.text || "تم الاستلام بنجاح.";
+                    appendMessage('ai', aiText, data.interaction_id);
+
+                    // Update memory
+                    chatHistory.push({ role: 'user', content: [{ text: text }] });
+                    chatHistory.push({ role: 'assistant', content: [{ text: aiText }] });
+
+                } catch (error) {
+                    console.error("Chat error:", error);
+                    loadingIndicator.classList.add("hidden");
+                    appendMessage('ai', "عذراً، حدث خطأ أثناء الاتصال بالخادم.");
+                }
+            });
+        });
+    </script>
+</body>
+</html>
