@@ -47,11 +47,12 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             const data = await response.json();
-            // Backend returns { answer: "ai text..." } based on chat.py
+            // Backend returns { answer: "ai text...", interaction_id: "..." } based on chat.py
             const aiText = data.answer || data.response || data.message || data.text || "No response received";
+            const interactionId = data.interaction_id || null;
             
             loadingIndicator.classList.add("hidden");
-            appendMessage("ai", aiText);
+            appendMessage("ai", aiText, interactionId);
         } catch (error) {
             console.error("Chat API error:", error);
             loadingIndicator.classList.add("hidden");
@@ -70,18 +71,62 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // Helper: Append Message to UI
-    function appendMessage(sender, text) {
+    function appendMessage(sender, text, interactionId = null) {
         const messageDiv = document.createElement("div");
         messageDiv.classList.add("message", `${sender}-message`);
 
         const bubble = document.createElement("div");
         bubble.classList.add("bubble");
         bubble.textContent = text;
-
         messageDiv.appendChild(bubble);
+
+        // Add feedback buttons for AI messages with an interaction ID
+        if (sender === "ai" && interactionId) {
+            const feedbackContainer = document.createElement("div");
+            feedbackContainer.classList.add("feedback-container");
+
+            const upBtn = document.createElement("button");
+            upBtn.classList.add("feedback-btn");
+            upBtn.innerHTML = "👍";
+            upBtn.onclick = () => sendFeedback(interactionId, "up", upBtn, downBtn);
+
+            const downBtn = document.createElement("button");
+            downBtn.classList.add("feedback-btn");
+            downBtn.innerHTML = "👎";
+            downBtn.onclick = () => sendFeedback(interactionId, "down", downBtn, upBtn);
+
+            feedbackContainer.appendChild(upBtn);
+            feedbackContainer.appendChild(downBtn);
+            messageDiv.appendChild(feedbackContainer);
+        }
+
         chatMessages.appendChild(messageDiv);
-        
         scrollToBottom();
+    }
+
+    async function sendFeedback(interactionId, rating, clickedBtn, otherBtn) {
+        if (clickedBtn.classList.contains("selected") || otherBtn.classList.contains("selected")) return; // already submitted
+
+        try {
+            const response = await fetch("http://localhost:8002/feedback", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    interaction_id: interactionId,
+                    rating: rating
+                })
+            });
+
+            if (response.ok) {
+                clickedBtn.classList.add("selected");
+                clickedBtn.style.opacity = "1";
+                otherBtn.style.opacity = "0.3";
+                clickedBtn.style.cursor = "default";
+                otherBtn.style.cursor = "default";
+            }
+        } catch (error) {
+            console.error("Feedback error:", error);
+        }
     }
 
     // Helper: Scroll to the latest message

@@ -163,3 +163,12 @@ body {
 #send-btn:hover {
     background-color: #126379;
 }
+
+/* Feedback Fixes */
+.message { flex-direction: column; }
+.user-message { align-items: flex-start; }
+.ai-message { align-items: flex-end; }
+.feedback-container { margin-top: 5px; text-align: left; align-self: flex-end; width: 100%; }
+.feedback-btn { background: none; border: none; cursor: pointer; opacity: 0.6; transition: opacity 0.2s; font-size: 14px; margin-right: 5px; }
+.feedback-btn:hover { opacity: 1; }
+.feedback-btn.selected { opacity: 1; transform: scale(1.1); }

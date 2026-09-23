@@ -170,18 +170,20 @@ TOOL_CONFIG = {
     ]
 }
 
-SYSTEM_PROMPT = (
-    "أنت مساعد خدمة عملاء يجيب فقط على الأسئلة المتعلقة بخدمات الشركة وسياساتها "
-    "وتذاكر الدعم والطلبات. يجب أن تكون جميع إجاباتك باللغة العربية دائمًا، "
-    "بغض النظر عن لغة السؤال. "
-    "\n\n"
-    "قاعدة إلزامية: يجب عليك استخدام أداة search_knowledge_base في أول رسالة "
-    "لأي سؤال يتعلق بسياسة الشركة أو خدماتها، حتى لو كنت تعتقد أنك تعرف الإجابة. "
-    "لا تجب أبدًا من معرفتك العامة مباشرة - ابحث في قاعدة المعرفة أولاً دائمًا. "
-    "بعد الحصول على نتائج البحث، اذكر رقم الصفحة (page number) التي وردت منها المعلومة. "
-    "استخدم lookup_ticket أو check_order_status أو escalate_to_human عند الحاجة. "
-    "إذا لم تجد قاعدة المعرفة إجابة ذات صلة بعد البحث الفعلي، وضّح ذلك بصراحة."
-)
+SYSTEM_PROMPT = """أنت مساعد ذكي وودود لخدمة العملاء. هدفك هو تقديم تجربة استثنائية وسريعة للعملاء.
+
+تعليمات الشخصية والأسلوب (Persona & Tone):
+1. النبرة: كن ودوداً، مهنياً، ومتعاطفاً. استخدم نبرة دافئة ومرحبة.
+2. التنسيق: اجعل إجاباتك قصيرة ومريحة للعين. استخدم النقاط (Bullet points) للخطوات أو الشروط، وقم بتمييز الكلمات المهمة بخط عريض (**Bold**).
+3. الرموز التعبيرية: استخدم بعض الرموز التعبيرية الاحترافية (مثل 😊، ✅، 🔍، 📞) بشكل معتدل لجعل المحادثة طبيعية.
+4. الشفافية: أنت ذكاء اصطناعي، فلا تتظاهر بأنك إنسان.
+
+قواعد استرجاع المعلومات (RAG):
+1. ابحث دائماً في قاعدة المعرفة باستخدام الأداة (search_knowledge_base) قبل الإجابة على أي سؤال يخص الشركة أو السياسات.
+2. لا تخترع (Hallucinate) أي معلومات من خارج النصوص المسترجعة أبداً. إذا لم تجد الإجابة، اعتذر بلباقة واعرض تحويل العميل إلى موظف بشري باستخدام الأداة (escalate_to_human).
+3. عند تقديم معلومات من قاعدة المعرفة، يمكنك صياغتها بأسلوبك الودود الجديد، لكن حافظ على دقة المعلومات المذكورة.
+
+استخدم lookup_ticket أو check_order_status أو escalate_to_human عند الحاجة."""
 
 
 def _bedrock_client():
@@ -263,6 +265,7 @@ def _run_tool_loop(query: str, organization_id: str) -> tuple[str, float | None,
 def _log_interaction(organization_id, user_id, query_text, answer_text,
                       topic_guard_status, source_type, similarity_score, latency_ms):
     conn = get_connection()
+    interaction_id = str(uuid.uuid4())
     try:
         with conn:
             with conn.cursor() as cur:
@@ -274,10 +277,11 @@ def _log_interaction(organization_id, user_id, query_text, answer_text,
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
-                        str(uuid.uuid4()), organization_id, user_id, query_text, answer_text,
+                        interaction_id, organization_id, user_id, query_text, answer_text,
                         topic_guard_status, source_type, similarity_score, latency_ms,
                     ),
                 )
+        return interaction_id
     finally:
         conn.close()
 
@@ -288,13 +292,14 @@ def handle_chat(query: str, organization_id: str, user_id: str | None = None) ->
     status, reason = topic_guard(query)
     if status == "BLOCKED":
         latency_ms = int((time.time() - start) * 1000)
-        _log_interaction(
+        interaction_id = _log_interaction(
             organization_id, user_id, query, REFUSAL_MESSAGE,
             topic_guard_status="BLOCKED", source_type=None,
             similarity_score=None, latency_ms=latency_ms,
         )
         return {
             "answer": REFUSAL_MESSAGE,
+            "interaction_id": interaction_id,
             "topic_guard_status": "BLOCKED",
             "source_type": None,
             "similarity_score": None,
@@ -329,10 +334,10 @@ def handle_chat(query: str, organization_id: str, user_id: str | None = None) ->
         answer = f"{answer}\n\nالمصدر: {best_kb_result['source_file']} - الصفحة {best_kb_result['page_number']}"
     else:
         source_type = "fallback_general"
-        answer = f"[إجابة من الذكاء الاصطناعي، وليست من قاعدة المعرفة] {answer}"
+        answer = answer
 
     latency_ms = int((time.time() - start) * 1000)
-    _log_interaction(
+    interaction_id = _log_interaction(
         organization_id, user_id, query, answer,
         topic_guard_status="ALLOWED", source_type=source_type,
         similarity_score=best_similarity, latency_ms=latency_ms,
@@ -340,11 +345,24 @@ def handle_chat(query: str, organization_id: str, user_id: str | None = None) ->
 
     return {
         "answer": answer,
+        "interaction_id": interaction_id,
         "topic_guard_status": "ALLOWED",
         "source_type": source_type,
         "similarity_score": best_similarity,
     }
 
 def submit_feedback(interaction_id: str, rating: str) -> dict:
-    return {'status': 'success', 'interaction_id': interaction_id, 'rating': rating}
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO feedback (interaction_id, rating) VALUES (%s, %s)",
+                    (interaction_id, rating)
+                )
+        return {'status': 'success', 'interaction_id': interaction_id, 'rating': rating}
+    except Exception as e:
+        raise ValueError(f"Failed to submit feedback: {str(e)}")
+    finally:
+        conn.close()
 
