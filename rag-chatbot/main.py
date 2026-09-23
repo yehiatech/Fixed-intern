@@ -100,3 +100,168 @@ def feedback(request: FeedbackRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     return {"message": "feedback recorded", **result}
+# --- Admin & Setup Endpoints ---
+class OrgCreateRequest(BaseModel):
+    name: str
+
+class UserCreateRequest(BaseModel):
+    username: str
+    password: str
+    role: str
+    organization_id: Optional[str] = None
+
+@app.post("/organizations")
+def create_organization(req: OrgCreateRequest):
+    from db import get_connection
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute("INSERT INTO organizations (name) VALUES (%s) RETURNING id", (req.name,))
+                org_id = cur.fetchone()[0]
+        return {"id": org_id, "name": req.name}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+@app.post("/users")
+def create_user(req: UserCreateRequest):
+    from db import get_connection
+    import hashlib
+    conn = get_connection()
+    pw_hash = hashlib.sha256(req.password.encode()).hexdigest()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO users (username, password_hash, role, organization_id) VALUES (%s, %s, %s, %s) RETURNING id", 
+                    (req.username, pw_hash, req.role, req.organization_id)
+                )
+                user_id = cur.fetchone()[0]
+        return {"id": user_id, "username": req.username, "role": req.role}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+@app.get("/organizations")
+def list_organizations():
+    from db import get_connection
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id, name FROM organizations")
+                orgs = [{"id": row[0], "name": row[1]} for row in cur.fetchall()]
+        return {"organizations": orgs}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+
+# --- API Endpoints ---
+class LoginRequest(BaseModel):
+    username: str
+
+@app.post("/api/login")
+def login(req: LoginRequest):
+    from db import get_connection
+    from fastapi import HTTPException
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT role, organization_id FROM users WHERE username = %s", (req.username,))
+                row = cur.fetchone()
+                if not row:
+                    raise HTTPException(status_code=401, detail="Invalid username")
+                return {"role": row[0], "organization_id": row[1]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+@app.get("/api/organizations")
+def get_all_organizations():
+    from db import get_connection
+    from fastapi import HTTPException
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM organizations")
+                columns = [desc[0] for desc in cur.description]
+                orgs = [dict(zip(columns, row)) for row in cur.fetchall()]
+        return {"organizations": orgs}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+@app.delete("/api/organizations/{id}")
+def delete_organization(id: str):
+    from db import get_connection
+    from fastapi import HTTPException
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM organizations WHERE id = %s", (id,))
+        return {"message": "Organization deleted"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+class StatusUpdateRequest(BaseModel):
+    status: str
+
+@app.put("/api/organizations/{id}/status")
+def update_organization_status(id: str, req: StatusUpdateRequest):
+    from db import get_connection
+    from fastapi import HTTPException
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE organizations SET status = %s WHERE id = %s", (req.status, id))
+        return {"message": "Status updated"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+@app.get("/api/organizations/{id}/users")
+def get_org_users(id: str):
+    from db import get_connection
+    from fastapi import HTTPException
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id, username, role FROM users WHERE organization_id = %s", (id,))
+                users = [{"id": row[0], "username": row[1], "role": row[2]} for row in cur.fetchall()]
+        return {"users": users}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
+
+@app.delete("/api/users/{id}")
+def delete_user(id: str):
+    from db import get_connection
+    from fastapi import HTTPException
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM users WHERE id = %s", (id,))
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        conn.close()
