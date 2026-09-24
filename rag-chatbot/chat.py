@@ -23,6 +23,7 @@ import requests
 
 from db import get_connection
 from ingestion import search_chunks
+from ticket_service import create_ticket_record, TicketError
 
 CHAT_MODEL_ID = os.getenv("CHAT_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
 CITATION_THRESHOLD = 0.35
@@ -94,8 +95,17 @@ def _tool_check_order_status(tool_input: dict, organization_id: str) -> dict:
     return {"available": False, "message": "خدمة تتبع الطلبات غير متاحة حاليًا."}
 
 
-def _tool_create_ticket(tool_input: dict, organization_id: str) -> dict:
-    import random
+def _messages_to_transcript(messages: list) -> list[dict]:
+    """Plain-text copy of the conversation (tool calls/results dropped) for the ticket."""
+    transcript = []
+    for m in messages:
+        text = " ".join(b["text"] for b in m.get("content", []) if isinstance(b, dict) and "text" in b).strip()
+        if text:
+            transcript.append({"role": m.get("role", "user"), "text": text})
+    return transcript
+
+
+def _tool_create_ticket(tool_input: dict, organization_id: str, transcript: list | None = None) -> dict:
     name = tool_input.get("customer_name", "Unknown")
     phone = tool_input.get("phone_number", "Unknown")
     desc = tool_input.get("issue_description", "Unknown")
@@ -108,12 +118,32 @@ def _tool_create_ticket(tool_input: dict, organization_id: str) -> dict:
             "error": "TICKET CREATION FAILED. You provided a missing or placeholder issue_description. You MUST explicitly ask the user 'What is the problem/issue you are facing?' and wait for their response before trying again."
         }
 
-    ticket_id = f"TCK-{random.randint(1000, 9999)}"
-    
+    # Save the ticket in the same database the dashboards read from.
+    try:
+        created = create_ticket_record(
+            organization_id=organization_id,
+            customer_name=name,
+            phone_number=phone,
+            issue_description=desc,
+            ai_transcript=transcript,
+            source="chatbot",
+        )
+    except TicketError as e:
+        return {
+            "error": f"TICKET NOT SAVED ({e.message}). Do NOT tell the customer a ticket was created. "
+                     "Apologize briefly and tell them the request could not be registered right now."
+        }
+    except Exception:
+        return {
+            "error": "TICKET NOT SAVED (database error). Do NOT tell the customer a ticket was created. "
+                     "Apologize briefly and tell them the request could not be registered right now."
+        }
+
+    ticket_id = created["id"]
     return {
         "success": True,
         "ticket_id": ticket_id,
-        "message": f"Successfully created ticket {ticket_id} for {name} ({phone})."
+        "message": f"Successfully created ticket {ticket_id} for {name} ({phone}).",
     }
 
 
@@ -265,6 +295,8 @@ def _run_tool_loop(query: str, organization_id: str, history: list = None) -> tu
                 result = {"error": f"Unknown tool: {name}"}
             elif name == "search_knowledge_base":
                 result = fn({"query": query}, organization_id)
+            elif name == "create_ticket":
+                result = fn(tool_input, organization_id, transcript=_messages_to_transcript(messages))
             else:
                 result = fn(tool_input, organization_id)
 

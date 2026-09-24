@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Organizations Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="common.js"></script>
     <style>
         body { font-family: Arial, Helvetica, sans-serif; background-color: #f5f6f8; }
     </style>
@@ -304,32 +305,64 @@
                 }
             });
 
+            // --- Org admins: read from / saved to the database ---
+            async function loadAdmins() {
+                if (!currentRowToManage) return;
+                const orgId = currentRowToManage.dataset.id;
+                adminList.innerHTML = '<li class="text-xs text-gray-400">Loading...</li>';
+                try {
+                    const { admins } = await apiFetch(`/api/organizations/${orgId}/admins`);
+                    adminList.innerHTML = '';
+                    if (!admins.length) {
+                        adminList.innerHTML = '<li class="text-xs text-gray-400">No administrators yet.</li>';
+                    }
+                    admins.forEach(a => addAdminToUI(a));
+                } catch (err) {
+                    adminList.innerHTML = '<li class="text-xs text-red-500">Could not load administrators.</li>';
+                    console.error(err);
+                }
+            }
+
             // Add Admin Form
-            addAdminForm.addEventListener('submit', (e) => {
+            addAdminForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const username = document.getElementById('newAdminUsername').value;
-                addAdminToUI(username);
-                addAdminForm.reset();
+                if (!currentRowToManage) return;
+                const orgId = currentRowToManage.dataset.id;
+                try {
+                    await apiFetch(`/api/organizations/${orgId}/admins`, {
+                        method: 'POST',
+                        body: {
+                            username: document.getElementById('newAdminUsername').value.trim(),
+                            password: document.getElementById('newAdminPassword').value,
+                        },
+                    });
+                    addAdminForm.reset();
+                    showToast("Administrator added.", "success");
+                    await loadAdmins();
+                } catch (err) {
+                    showToast(err.message || "Failed to add administrator.", "error");
+                }
             });
 
             // Helper to render an admin list item
-            function addAdminToUI(username) {
+            function addAdminToUI(admin) {
                 const li = document.createElement('li');
                 li.className = "flex justify-between items-center p-2 bg-white border border-gray-200 rounded-md text-sm";
                 li.innerHTML = `
-                    <span class="font-medium text-gray-800">${username}</span>
+                    <span class="font-medium text-gray-800">${esc(admin.username)}</span>
                     <button type="button" class="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 btn-remove-admin">Remove</button>
                 `;
-                li.querySelector('.btn-remove-admin').addEventListener('click', () => {
-                    if (confirm(`Remove admin ${username}?`)) li.remove();
+                li.querySelector('.btn-remove-admin').addEventListener('click', async () => {
+                    if (!confirm(`Remove admin ${admin.username}?`)) return;
+                    try {
+                        await apiFetch(`/api/organizations/${currentRowToManage.dataset.id}/members/${encodeURIComponent(admin.id)}`, { method: 'DELETE' });
+                        showToast("Administrator removed.", "success");
+                        await loadAdmins();
+                    } catch (err) {
+                        showToast(err.message || "Failed to remove administrator.", "error");
+                    }
                 });
                 adminList.appendChild(li);
-            }
-
-            function populateMockAdmins() {
-                adminList.innerHTML = '';
-                addAdminToUI("super_admin");
-                if (Math.random() > 0.5) addAdminToUI("manager_account");
             }
 
             // --- Row Button Listeners ---
@@ -349,9 +382,9 @@
                     manageOrgName.innerText = name;
                     editOrgStatus.value = currentStatus || "Active";
                     
-                    // Reset add form and populate mock admins
+                    // Reset add form and load this organization's real admins
                     addAdminForm.reset();
-                    populateMockAdmins();
+                    loadAdmins();
                     
                     manageModal.classList.remove('hidden');
                 });

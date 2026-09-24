@@ -57,6 +57,10 @@
                 const data = await response.json();
                 localStorage.setItem('role', data.role);
                 localStorage.setItem('organization_id', data.organization_id);
+                localStorage.setItem('user_id', data.user_id ?? '');
+                localStorage.setItem('username', data.username ?? '');
+                localStorage.setItem('full_name', data.full_name ?? '');
+                localStorage.setItem('organization_name', data.organization_name ?? '');
                 
                 if (data.role === 'super_admin' || data.role === 'superadmin') {
                     window.location.href = 'organizations.html';

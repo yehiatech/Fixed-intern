@@ -22,6 +22,31 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
+# Dashboard API (tickets / agents / org admins) - additive, lives in admin_api.py
+from admin_api import router as dashboard_router
+app.include_router(dashboard_router)
+
+
+@app.on_event("startup")
+def _prepare_database():
+    # Creates base tables on first run and applies additive, idempotent upgrades.
+    # Runs in the background and retries, because the DB container may still be booting.
+    import threading, time
+
+    def _worker():
+        from schema_upgrade import ensure_schema
+        for attempt in range(1, 21):
+            try:
+                ensure_schema()
+                print("[startup] database schema ready")
+                return
+            except Exception as e:
+                print(f"[startup] schema check failed (attempt {attempt}/20): {e}")
+                time.sleep(3)
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
 # Root Endpoint
 @app.get("/")
 def read_root():
@@ -173,11 +198,16 @@ def login(req: LoginRequest):
     try:
         with conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT role, organization_id FROM users WHERE username = %s", (req.username,))
+                cur.execute(
+                    "SELECT u.role, u.organization_id, u.id, u.username, u.full_name, o.name "
+                    "FROM users u LEFT JOIN organizations o ON o.id = u.organization_id "
+                    "WHERE u.username = %s", (req.username,))
                 row = cur.fetchone()
                 if not row:
                     raise HTTPException(status_code=401, detail="Invalid username")
-                return {"role": row[0], "organization_id": row[1]}
+                return {"role": row[0], "organization_id": row[1],
+                        "user_id": str(row[2]), "username": row[3],
+                        "full_name": row[4] or row[3], "organization_name": row[5]}
     except HTTPException:
         raise
     except Exception as e:
