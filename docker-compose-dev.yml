@@ -122,6 +122,8 @@ services:
     env_file: .env
     environment:
       - DB_HOST=db
+    volumes:
+      - ./rag-chatbot:/app
     ports:
       - "8002:8002"
     depends_on:
