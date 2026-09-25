@@ -76,7 +76,7 @@ def trigger_call(payload: CallTriggerRequest) -> CallTriggerResponse:
         response = client.voice.create_call(
     CreateCallRequest(
         to=[ToPhone(number=to_number)],
-        from_=PhoneEndpoint(number=from_number),
+        from_={"number": from_number},
 
         # Called when the customer answers the call
         answer_url=[
