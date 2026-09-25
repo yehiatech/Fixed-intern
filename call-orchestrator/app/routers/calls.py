@@ -1,18 +1,18 @@
 """
-T-07b defined the contract shape; T-12 wires it to the real conversation
-pipeline instead of a static dummy.
-
-trigger_call now actually places (or, in DEV_MODE, simulates) the
-outbound call pointing Twilio at /voice/incoming/{call_id}, and
-initializes conversation state. get_call_result now reads the live
-conversation state instead of returning a hardcoded response.
+trigger_call places a real outbound PSTN call through Vonage's Voice
+API (voice.create_call), pointing Vonage's answer_url at
+/voice/answer/{call_id}. get_call_result reads the same
+conversation_state dict that app/routers/voice.py's webhooks write to
+directly — back to a single process, no internal state-sync endpoint
+needed (that was only necessary for the LiveKit split-process setup).
 """
 import logging
 import time
 import uuid
 
 from fastapi import APIRouter
-
+from vonage import Auth, Vonage
+from vonage_voice import CreateCallRequest, PhoneEndpoint, ToPhone
 
 from app.config import get_settings
 from app.conversation_state import exists, get_state, init_call
@@ -29,10 +29,30 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/calls", tags=["calls"])
 
 
-from livekit.api import AccessToken, VideoGrants
+def _is_dev_mode() -> bool:
+    settings = get_settings()
+    return not (settings.vonage_application_id and settings.vonage_private_key_path and settings.public_base_url)
 
 @router.post("/trigger", response_model=CallTriggerResponse, status_code=202)
 def trigger_call(payload: CallTriggerRequest) -> CallTriggerResponse:
+    if exists(payload.call_id):
+        raise APIError(
+            status_code=409,
+            error="call_already_active",
+            message="A call for this customer is already in progress",
+            call_id=payload.call_id,
+        )
+
+@router.post("/trigger", response_model=CallTriggerResponse, status_code=202)
+def trigger_call(payload: CallTriggerRequest) -> CallTriggerResponse:
+    if not payload.customer_phone.startswith("+"):
+        raise APIError(
+            status_code=400,
+            error="invalid_phone_number",
+            message="The phone number format is invalid. Must start with +",
+            call_id=payload.call_id,
+        )
+
     if exists(payload.call_id):
         raise APIError(
             status_code=409,
@@ -49,26 +69,52 @@ def trigger_call(payload: CallTriggerRequest) -> CallTriggerResponse:
     )
 
     settings = get_settings()
-    
-    # Generate LiveKit Token for the Dashlet to join
-    room_name = f"call_{payload.call_id}"
-    identity = "employee_agent"
-    
-    token = AccessToken(
-        settings.livekit_api_key or "devkey",
-        settings.livekit_api_secret or "secret"
-    ).with_identity(identity) \
-     .with_name("CRM Employee") \
-     .with_grants(VideoGrants(room_join=True, room=room_name)) \
-     .to_jwt()
 
-    logger.info("Generated LiveKit token for call_id=%s room=%s", payload.call_id, room_name)
+    if _is_dev_mode():
+        # No real Vonage application configured yet — return a fake uuid
+        # so the endpoint is still testable (contract shape, 400/409
+        # handling) without a Vonage account. Hit
+        # POST /voice/answer/{call_id} yourself to simulate the call
+        # connecting, same as we did for the Twilio version.
+        vonage_call_uuid = f"DEV_MODE_FAKE_{uuid.uuid4().hex}"
+        logger.info("DEV_MODE: trigger_call accepted (no real call placed) call_id=%s", payload.call_id)
+    else:
+        client = Vonage(
+            Auth(
+                application_id=settings.vonage_application_id,
+                private_key=settings.vonage_private_key_path,
+            )
+        )
+        # Vonage numbers are E.164 without the leading "+".
+        to_number = payload.customer_phone.lstrip("+")
+        from_number = settings.vonage_number
+
+        response = client.voice.create_call(
+    CreateCallRequest(
+        to=[ToPhone(number=to_number)],
+        from_=PhoneEndpoint(number=from_number),
+
+        # Called when the customer answers the call
+        answer_url=[
+            f"{settings.public_base_url}/voice/answer/{payload.call_id}"
+        ],
+        answer_method="POST",
+
+        # Called by Vonage with call status events
+        event_url=[
+            f"{settings.public_base_url}/voice/call-events/{payload.call_id}"
+        ],
+        event_method="POST",
+    )
+)
+        vonage_call_uuid = response.uuid
+        logger.info("Real Vonage call placed: uuid=%s call_id=%s", vonage_call_uuid, payload.call_id)
 
     return CallTriggerResponse(
         status="accepted",
         call_id=payload.call_id,
-        livekit_token=token,
-        message="LiveKit Room Created",
+        vonage_call_uuid=vonage_call_uuid,
+        message="Call initiated",
     )
 
 
@@ -96,25 +142,3 @@ def get_call_result(call_id: str):
         tools_used=state["tools_used"],
         resolution=state["resolution"] or "call_ended",
     )
-
-from pydantic import BaseModel
-from app.conversation_state import update_state_safe
-
-class StateUpdateRequest(BaseModel):
-    resolution: str | None = None
-    sentiment: str | None = None
-    tools_used: list[str] | None = None
-    ended: bool | None = None
-
-@router.post("/internal/state/{call_id}")
-def update_internal_state(call_id: str, update: StateUpdateRequest):
-    success = update_state_safe(
-        call_id=call_id,
-        resolution=update.resolution,
-        sentiment=update.sentiment,
-        tools_used=update.tools_used,
-        ended=update.ended
-    )
-    if not success:
-        return {"status": "error", "message": "Call state not found"}
-    return {"status": "ok"}
