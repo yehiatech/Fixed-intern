@@ -1,4 +1,14 @@
 document.addEventListener("DOMContentLoaded", () => {
+    // Which organization this widget belongs to. Tickets the chatbot opens are saved under it.
+    // Embed with:  index.html?org_id=<organization uuid>   (or set window.CHAT_ORG_ID before this script).
+    const NO_ORG = "00000000-0000-0000-0000-000000000000";
+    const ORG_ID = new URLSearchParams(window.location.search).get("org_id") || window.CHAT_ORG_ID || NO_ORG;
+    if (ORG_ID === NO_ORG) {
+        console.warn("Chat widget: no org_id provided - the chatbot cannot save tickets. Use ?org_id=<uuid>.");
+    }
+    // Conversation memory, so the bot can collect name / phone / issue over several messages.
+    const chatHistory = [];
+
     const chatFab = document.getElementById("chat-fab");
     const chatWindow = document.getElementById("chat-window");
     const closeChatBtn = document.getElementById("close-chat");
@@ -37,8 +47,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({
-                    organization_id: "00000000-0000-0000-0000-000000000000",
-                    query: text
+                    organization_id: ORG_ID,
+                    query: text,
+                    history: [...chatHistory]
                 })
             });
 
@@ -53,6 +64,8 @@ document.addEventListener("DOMContentLoaded", () => {
             
             loadingIndicator.classList.add("hidden");
             appendMessage("ai", aiText, interactionId);
+            chatHistory.push({ role: "user", content: [{ text: text }] });
+            chatHistory.push({ role: "assistant", content: [{ text: aiText }] });
         } catch (error) {
             console.error("Chat API error:", error);
             loadingIndicator.classList.add("hidden");
