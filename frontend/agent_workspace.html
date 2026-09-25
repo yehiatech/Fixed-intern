@@ -446,7 +446,7 @@
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         call_id: ticketId,
-                        customer_phone: customerPhone || "20127466913",
+                        customer_phone: (customerPhone || "+20127466913").startsWith('+') ? (customerPhone || "+20127466913") : '+' + (customerPhone || "+20127466913"),
                         customer_name: customerName,
                         org_id: s.organization_id,
                         retry_attempt: 0,
