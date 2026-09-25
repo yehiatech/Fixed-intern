@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat Widget Mockup</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+    <!-- Floating Chat Button -->
+    <button id="chat-fab" class="chat-fab">
+        <i class="fa-solid fa-comments"></i>
+    </button>
+
+    <!-- Chat Window container -->
+    <div id="chat-window" class="chat-window">
+        
+        <!-- Header -->
+        <div class="chat-header">
+            <div class="chat-header-info">
+                <i class="fa-solid fa-robot bot-avatar"></i>
+                <div>
+                    <h3>المساعد الذكي</h3>
+                    <span class="status-indicator">متصل الآن</span>
+                </div>
+            </div>
+            <button id="close-chat" class="close-btn">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- Messages Area -->
+        <div id="chat-messages" class="chat-messages">
+            <div class="message ai-message">
+                <div class="bubble">
+                    مرحباً! أنا المساعد الذكي الخاص بك. كيف يمكنني مساعدتك في استفساراتك اليوم؟
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Indicator (Hidden by default) -->
+        <div id="loading-indicator" class="loading-indicator hidden">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="chat-input-area">
+            <input type="text" id="chat-input" placeholder="اكتب رسالتك هنا..." autocomplete="off">
+            <button id="send-btn" class="send-btn">
+                <i class="fa-solid fa-paper-plane"></i>
+            </button>
+        </div>
+
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

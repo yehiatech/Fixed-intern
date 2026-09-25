@@ -8,10 +8,21 @@ discovery.docker "containers" {
   host = "unix:///var/run/docker.sock"
 }
 
+// Un-hide the Docker container name so Grafana can see it
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
 // Scrape the logs from those containers
 loki.source.docker "default" {
   host       = "unix:///var/run/docker.sock"
-  targets    = discovery.docker.containers.targets
+  targets    = discovery.relabel.containers.output
   forward_to = [loki.write.grafana_cloud.receiver]
 }
 

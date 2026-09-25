@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background-color: #f5f6f8;
+        }
+    </style>
+</head>
+<body class="antialiased flex items-center justify-center min-h-screen">
+    
+    <div class="bg-white text-gray-800 border border-gray-200 rounded-xl p-8 shadow-md w-full max-w-md">
+        <div class="text-center mb-8">
+            <h2 class="text-2xl font-bold text-[#177a94]">Login</h2>
+        </div>
+        
+        <form id="loginForm" class="space-y-6">
+            <div>
+                <label for="username" class="block text-sm font-medium mb-2">Username</label>
+                <input type="text" id="username" class="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:border-[#177a94] focus:ring-1 focus:ring-[#177a94]" placeholder="Enter your username" required>
+            </div>
+            
+            <div>
+                <label for="password" class="block text-sm font-medium mb-2">Password</label>
+                <input type="password" id="password" class="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:border-[#177a94] focus:ring-1 focus:ring-[#177a94]" placeholder="Enter your password" required>
+            </div>
+            
+            <div>
+                <button type="submit" class="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-[#177a94] hover:bg-[#126379] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#177a94] transition-colors">
+                    Login
+                </button>
+            </div>
+        </form>
+    </div>
+
+
+<script>
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const username = document.getElementById('username').value;
+        
+        try {
+            const response = await fetch('http://localhost:8002/api/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                localStorage.setItem('role', data.role);
+                localStorage.setItem('organization_id', data.organization_id);
+                localStorage.setItem('user_id', data.user_id ?? '');
+                localStorage.setItem('username', data.username ?? '');
+                localStorage.setItem('full_name', data.full_name ?? '');
+                localStorage.setItem('organization_name', data.organization_name ?? '');
+                
+                if (data.role === 'super_admin' || data.role === 'superadmin') {
+                    window.location.href = 'organizations.html';
+                } else if (data.role === 'agent') {
+                    window.location.href = 'agent_workspace.html';
+                } else {
+                    window.location.href = 'org_admin.html';
+                }
+            } else {
+                alert('Login failed. Please check your username.');
+            }
+        } catch (error) {
+            console.error('Login error:', error);
+            alert('An error occurred. Please try again later.');
+        }
+    });
+</script>
+</body>
+
+</html>

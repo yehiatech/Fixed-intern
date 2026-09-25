@@ -33,6 +33,15 @@ def _is_dev_mode() -> bool:
     settings = get_settings()
     return not (settings.vonage_application_id and settings.vonage_private_key_path and settings.public_base_url)
 
+@router.post("/trigger", response_model=CallTriggerResponse, status_code=202)
+def trigger_call(payload: CallTriggerRequest) -> CallTriggerResponse:
+    if exists(payload.call_id):
+        raise APIError(
+            status_code=409,
+            error="call_already_active",
+            message="A call for this customer is already in progress",
+            call_id=payload.call_id,
+        )
 
 @router.post("/trigger", response_model=CallTriggerResponse, status_code=202)
 def trigger_call(payload: CallTriggerRequest) -> CallTriggerResponse:

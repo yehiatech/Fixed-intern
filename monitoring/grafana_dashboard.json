@@ -1,0 +1,84 @@
+{
+  "title": "AI Call Center - System Logs",
+  "description": "Live logs and metrics from Docker containers on AWS EC2",
+  "tags": ["monitoring", "ai_callcenter"],
+  "timezone": "browser",
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "templating": {
+    "list": [
+      {
+        "name": "container",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "grafanacloud-logs"
+        },
+        "query": "label_values(container)",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "refresh": 1
+      }
+    ]
+  },
+  "panels": [
+    {
+      "title": "Log Volume by Container",
+      "type": "timeseries",
+      "datasource": {
+        "type": "loki",
+        "uid": "grafanacloud-logs"
+      },
+      "gridPos": { "h": 7, "w": 18, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum by (container) (rate({container=~\"$container\"}[5m]))",
+          "legendFormat": "{{container}}"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right" }
+      }
+    },
+    {
+      "title": "Error Rate (Last 5m)",
+      "type": "stat",
+      "datasource": {
+        "type": "loki",
+        "uid": "grafanacloud-logs"
+      },
+      "gridPos": { "h": 7, "w": 6, "x": 18, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate({container=~\"$container\"} |= \"ERROR\" [5m]))",
+          "legendFormat": "Errors"
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area"
+      }
+    },
+    {
+      "title": "Live Container Logs",
+      "type": "logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "grafanacloud-logs"
+      },
+      "gridPos": { "h": 15, "w": 24, "x": 0, "y": 7 },
+      "targets": [
+        {
+          "expr": "{container=~\"$container\"}"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      }
+    }
+  ]
+}
