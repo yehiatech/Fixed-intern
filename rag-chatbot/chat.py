@@ -67,14 +67,28 @@ def _tool_search_knowledge_base(tool_input: dict, organization_id: str) -> dict:
 
 def _tool_lookup_ticket(tool_input: dict, organization_id: str) -> dict:
     ticket_id = tool_input["ticket_id"]
+    base_url = os.getenv("ESPOCRM_SITE_URL", "").rstrip("/")
+    api_key = os.getenv("ESPOCRM_API_KEY", "")
+
+    if not base_url or not api_key:
+        return {"found": False, "message": "لم يتم إعداد الاتصال بنظام EspoCRM بعد."}
+
     try:
-        import ticket_service as svc
-        ticket = svc.get_ticket(organization_id, ticket_id)
-        if not ticket:
-            return {"found": False, "message": f"لم يتم العثور على تذكرة بالرقم {ticket_id}."}
-        return {"found": True, "ticket_id": ticket_id, "raw": ticket}
-    except Exception as e:
-        return {"found": False, "message": f"خطأ داخلي أثناء البحث عن التذكرة: {e}"}
+        response = requests.get(
+            f"{base_url}/api/v1/CFollowUpCall/{ticket_id}",
+            headers={"X-Api-Key": api_key},
+            timeout=8,
+        )
+    except requests.RequestException as e:
+        return {"found": False, "message": f"فشل الاتصال بنظام EspoCRM: {e}"}
+
+    if response.status_code == 404:
+        return {"found": False, "message": f"لم يتم العثور على تذكرة بالرقم {ticket_id}."}
+    if not response.ok:
+        return {"found": False, "message": f"استجاب نظام EspoCRM بخطأ HTTP {response.status_code}."}
+
+    data = response.json()
+    return {"found": True, "ticket_id": ticket_id, "raw": data}
 
 
 def _tool_check_order_status(tool_input: dict, organization_id: str) -> dict:

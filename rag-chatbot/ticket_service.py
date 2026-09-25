@@ -139,20 +139,6 @@ def list_tickets(organization_id: str, agent_id: str | None = None) -> list[dict
         conn.close()
 
 
-def get_ticket(organization_id: str, ticket_id: str) -> dict | None:
-    conn = get_connection()
-    try:
-        with conn:
-            with conn.cursor() as cur:
-                org_id = _require_org(cur, organization_id)
-                sql = _TICKET_SELECT + " WHERE t.organization_id = %s AND t.id = %s"
-                cur.execute(sql, (org_id, ticket_id))
-                row = cur.fetchone()
-                if row:
-                    return _row_to_ticket(row)
-                return None
-    finally:
-        conn.close()
 def update_ticket_status(organization_id: str, ticket_id: str, status: str) -> dict:
     if status not in VALID_STATUSES:
         raise TicketError(f"status must be one of {', '.join(VALID_STATUSES)}", 400)
