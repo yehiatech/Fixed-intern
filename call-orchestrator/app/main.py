@@ -3,7 +3,6 @@ import logging
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.errors import APIError
@@ -24,14 +23,6 @@ app = FastAPI(
     version="0.1.0",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 app.include_router(health.router)
 app.include_router(calls.router)
 app.include_router(voice.router)
@@ -49,16 +40,7 @@ def api_error_handler(request: Request, exc: APIError) -> JSONResponse:
     )
 
 
-@app.exception_handler(APIError)
-def api_error_handler(request: Request, exc: APIError) -> JSONResponse:
-    """Turns a raised APIError into the exact error shape T-07b specifies:
-    {"error": "...", "message": "...", "call_id": "..."} — not FastAPI's
-    default {"detail": "..."}.
-    """
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"error": exc.error, "message": exc.message, "call_id": exc.call_id},
-    )
+
 
 
 @app.on_event("startup")
