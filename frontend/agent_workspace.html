@@ -440,13 +440,23 @@
                 transcriptDiv.innerHTML = '<div class="h-full flex items-center justify-center"><span class="text-xs text-blue-500 font-semibold italic">Call initiated...</span></div>';
             }
 
+            let phone = (customerPhone || "0127466913").trim();
+            // Auto-format local Egyptian numbers
+            if (phone.startsWith("01") && phone.length === 11) {
+                phone = "+20" + phone.substring(1);
+            } else if (phone.startsWith("201") && phone.length === 12) {
+                phone = "+" + phone;
+            } else if (!phone.startsWith("+")) {
+                phone = "+" + phone;
+            }
+
             try {
                 const response = await fetch("http://localhost:8001/calls/trigger", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         call_id: ticketId,
-                        customer_phone: (customerPhone || "+20127466913").startsWith('+') ? (customerPhone || "+20127466913") : '+' + (customerPhone || "+20127466913"),
+                        customer_phone: phone,
                         customer_name: customerName,
                         org_id: s.organization_id,
                         retry_attempt: 0,
