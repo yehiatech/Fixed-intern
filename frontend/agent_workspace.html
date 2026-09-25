@@ -177,7 +177,7 @@
                 const id = esc(t.id);
                 const phone = t.phone_number ? `<br><span class="text-xs text-gray-400">${esc(t.phone_number)}</span>` : '';
                 return `
-                        <tr id="row-${id}" data-ticket-id="${id}" class="hover:bg-blue-50 cursor-pointer transition-colors" onclick="toggleTicketDetails('${id}')">
+                        <tr id="row-${id}" data-ticket-id="${id}" class="hover:bg-blue-50 cursor-pointer transition-colors" onclick="toggleTicketDetails('${id}', '${esc(t.customer_name)}', '${phone}', false)">
                             <td class="px-6 py-4">
                                 <div class="text-sm font-bold text-[#177a94]">${esc(formatTicketId(t.id))}</div>
                                 <div class="text-sm text-gray-900 mt-1">${esc(t.issue_description)}</div>
@@ -189,7 +189,7 @@
                                 </select>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-center">
-                                <button class="inline-flex items-center justify-center gap-2 px-4 py-1.5 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-lg transition-colors shadow-sm" onclick="event.stopPropagation(); toggleTicketDetails('${id}', true)">
+                                <button class="inline-flex items-center justify-center gap-2 px-4 py-1.5 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-lg transition-colors shadow-sm" onclick="event.stopPropagation(); toggleTicketDetails('${id}', '${esc(t.customer_name)}', '${phone}', true)">
                                     Call
                                 </button>
                             </td>
@@ -432,11 +432,56 @@
 
     <!-- Ticket Expansion Logic -->
     <script>
-        function toggleTicketDetails(ticketId, focusCall = false) {
+        async function triggerAgentCall(ticketId, customerName, customerPhone) {
+            const s = getSession();
+            
+            const transcriptDiv = document.getElementById('transcript-' + ticketId);
+            if (transcriptDiv) {
+                transcriptDiv.innerHTML = '<div class="h-full flex items-center justify-center"><span class="text-xs text-blue-500 font-semibold italic">Call initiated...</span></div>';
+            }
+
+            try {
+                const response = await fetch("http://localhost:8001/calls/trigger", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        call_id: ticketId,
+                        customer_phone: customerPhone || "20127466913",
+                        customer_name: customerName,
+                        org_id: s.organization_id,
+                        retry_attempt: 0,
+                        assigned_agent: s.user_id,
+                        language: "ar-EG"
+                    })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    alert("Failed to start call: " + (err.message || err.detail || response.statusText));
+                    if (transcriptDiv) {
+                        transcriptDiv.innerHTML = '<div class="h-full flex items-center justify-center"><span class="text-xs text-red-500 font-semibold italic">Call failed</span></div>';
+                    }
+                } else {
+                    if (transcriptDiv) {
+                        transcriptDiv.innerHTML = '<div class="h-full flex items-center justify-center"><span class="text-xs text-green-500 font-semibold italic">Call in progress...</span></div>';
+                    }
+                }
+            } catch (error) {
+                console.error("Error triggering call:", error);
+                alert("Error triggering call: " + error);
+                if (transcriptDiv) {
+                    transcriptDiv.innerHTML = '<div class="h-full flex items-center justify-center"><span class="text-xs text-red-500 font-semibold italic">Connection error</span></div>';
+                }
+            }
+        }
+
+        function toggleTicketDetails(ticketId, customerName, customerPhone, focusCall = false) {
             const detailsRow = document.getElementById('details-' + ticketId);
             detailsRow.classList.toggle('hidden');
             
-            
+            if (focusCall && !detailsRow.classList.contains('hidden')) {
+                triggerAgentCall(ticketId, customerName, customerPhone);
+            }
         }
 
         async function saveCallLog(ticketId) {
