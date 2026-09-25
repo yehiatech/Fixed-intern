@@ -25,7 +25,7 @@ from db import get_connection
 from ingestion import search_chunks
 from ticket_service import create_ticket_record, TicketError
 
-CHAT_MODEL_ID = os.getenv("CHAT_MODEL_ID", "anthropic.claude-3-5-sonnet-20240620-v1:0")
+CHAT_MODEL_ID = os.getenv("CHAT_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
 CITATION_THRESHOLD = 0.35
 MAX_TOOL_ITERATIONS = 5
 
