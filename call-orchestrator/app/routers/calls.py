@@ -44,6 +44,14 @@ def trigger_call(payload: CallTriggerRequest) -> CallTriggerResponse:
             call_id=payload.call_id,
         )
 
+    if exists(payload.call_id):
+        raise APIError(
+            status_code=409,
+            error="call_already_active",
+            message="A call for this customer is already in progress",
+            call_id=payload.call_id,
+        )
+
     init_call(
         call_id=payload.call_id,
         customer_name=payload.customer_name,

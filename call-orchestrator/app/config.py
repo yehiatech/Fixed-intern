@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     aws_access_key_id: str = ""
     aws_secret_access_key: str = ""
     aws_region: str = "us-east-1"
+    bedrock_model_id: str = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
     polly_voice_language: str = "arb"  # Amazon Polly's Arabic (Zeina) language code, used via Vonage's talk action
 
     # Vonage Voice API
@@ -37,7 +38,7 @@ class Settings(BaseSettings):
     # Bedrock
     # =========================
     bedrock_model_id: str = (
-        "anthropic.claude-3-5-sonnet-20240620-v1:0"
+        "anthropic.claude-3-haiku-20240307-v1:0"
     )
 
     # =========================
