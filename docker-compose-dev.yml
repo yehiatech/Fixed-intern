@@ -24,44 +24,7 @@ services:
       timeout: 5s
       retries: 5
 
-  espocrm:
-    image: espocrm/espocrm:8.3
-    container_name: espocrm
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    environment:
-      ESPOCRM_DATABASE_PLATFORM: Postgresql
-      ESPOCRM_DATABASE_HOST: db
-      ESPOCRM_DATABASE_USER: ${DB_USER:-admin}
-      ESPOCRM_DATABASE_PASSWORD: ${DB_PASSWORD:-supersecretpassword}
-      ESPOCRM_DATABASE_NAME: espocrm
-      ESPOCRM_SITE_URL: "http://localhost:8080"
-    ports:
-      - "8080:80"
-    volumes:
-      - espocrm_data:/var/www/html
-    depends_on:
-      db:
-        condition: service_started
 
-  espocrm-daemon:
-    image: espocrm/espocrm:8.3
-    container_name: espocrm-daemon
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    volumes:
-      - espocrm_data:/var/www/html
-    entrypoint: docker-daemon.sh
-    depends_on:
-      - espocrm
 
   call-orchestrator:
     build: ./call-orchestrator
@@ -141,32 +104,7 @@ services:
       retries: 5
       start_period: 10s
 
-  bridge-scripts:
-    build: ./scripts
-    container_name: bridge-scripts
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    env_file: .env
-    environment:
-      ESPO_API_URL: "http://espocrm:80/api/v1"
-      ORCHESTRATOR_URL: "http://call-orchestrator:8001/calls"
-    volumes:
-      - ./scripts:/app
-    depends_on:
-      espocrm:
-        condition: service_started
-      call-orchestrator:
-        condition: service_started
-    healthcheck:
-      test: ["CMD", "pidof", "crond"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
+
 
 
 
@@ -181,5 +119,5 @@ services:
 
 volumes:
   prod_pgdata:
-  espocrm_data:
+
   alloy_data:
