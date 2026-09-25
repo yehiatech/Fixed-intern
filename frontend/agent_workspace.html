@@ -189,7 +189,7 @@
                                 </select>
                             </td>
                             <td class="px-6 py-4 whitespace-nowrap text-center">
-                                <button class="inline-flex items-center justify-center gap-2 px-4 py-1.5 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-lg transition-colors shadow-sm" onclick="event.stopPropagation(); toggleTicketDetails('${id}', true)">
+                                <button class="inline-flex items-center justify-center gap-2 px-4 py-1.5 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-lg transition-colors shadow-sm" onclick="event.stopPropagation(); triggerAgentCall('${id}', '${esc(t.phone_number || '')}', '${esc(t.customer_name)}')">
                                     Call
                                 </button>
                             </td>
@@ -437,6 +437,47 @@
             detailsRow.classList.toggle('hidden');
             
             
+        }
+
+        async function triggerAgentCall(ticketId, phone, name) {
+            const s = getSession();
+            toggleTicketDetails(ticketId);
+
+            if (!phone) {
+                alert("This ticket doesn't have a phone number!");
+                return;
+            }
+
+            const formattedPhone = phone.startsWith("+") ? phone : "+" + phone;
+
+            try {
+                const response = await fetch("http://localhost:8001/calls/trigger", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        call_id: ticketId,
+                        customer_phone: formattedPhone,
+                        customer_name: name || "Customer",
+                        org_id: s.organization_id,
+                        retry_attempt: 0,
+                        assigned_agent: s.user_id,
+                        language: "ar-EG"
+                    })
+                });
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    alert("Failed to start call: " + (data.message || response.statusText));
+                } else {
+                    const transcriptDiv = document.getElementById('transcript-' + ticketId);
+                    if (transcriptDiv) {
+                        transcriptDiv.innerHTML = '<div class="h-full flex items-center justify-center"><span class="text-xs text-blue-500 font-semibold italic">Call initiated...</span></div>';
+                    }
+                }
+            } catch (err) {
+                console.error("Trigger Call Error:", err);
+                alert("Error connecting to Voice API");
+            }
         }
 
         async function saveCallLog(ticketId) {
