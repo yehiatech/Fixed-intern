@@ -87,24 +87,7 @@ services:
       retries: 3
       start_period: 5s
 
-  livekit-agent:
-    build: ./call-orchestrator
-    container_name: livekit-agent
-    command: python livekit_agent.py start
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    env_file: .env
-    volumes:
-      - ./call-orchestrator:/app
-    depends_on:
-      livekit:
-        condition: service_started
-      call-orchestrator:
-        condition: service_started
+
 
   rag-chatbot:
     build: ./rag-chatbot
@@ -185,21 +168,7 @@ services:
       retries: 3
       start_period: 10s
 
-  livekit:
-    image: livekit/livekit-server:latest
-    container_name: livekit-server
-    command: --dev
-    ports:
-      - "7880:7880"
-      - "7881:7881"
-      - "7882:7882/udp"
-    environment:
-      - LIVEKIT_KEYS=devkey:secret
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7880/"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+
 
   chat-widget:
     image: nginx:alpine
