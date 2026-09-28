@@ -52,3 +52,6 @@ def append_transcript(call_id: str, role: str, text: str) -> None:
 def clear_call(call_id: str) -> None:
     with _lock:
         _calls.pop(call_id, None)
+
+def all_calls():
+    return list(_calls.values())

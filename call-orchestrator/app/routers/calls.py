@@ -23,7 +23,7 @@ from app.schemas import (
     CallTriggerRequest,
     CallTriggerResponse,
 )
-
+from app.conversation_state import all_calls
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/calls", tags=["calls"])
@@ -33,15 +33,6 @@ def _is_dev_mode() -> bool:
     settings = get_settings()
     return not (settings.vonage_application_id and settings.vonage_private_key_path and settings.public_base_url)
 
-@router.post("/trigger", response_model=CallTriggerResponse, status_code=202)
-def trigger_call(payload: CallTriggerRequest) -> CallTriggerResponse:
-    if exists(payload.call_id):
-        raise APIError(
-            status_code=409,
-            error="call_already_active",
-            message="A call for this customer is already in progress",
-            call_id=payload.call_id,
-        )
 
 @router.post("/trigger", response_model=CallTriggerResponse, status_code=202)
 def trigger_call(payload: CallTriggerRequest) -> CallTriggerResponse:
@@ -142,3 +133,31 @@ def get_call_result(call_id: str):
         tools_used=state["tools_used"],
         resolution=state["resolution"] or "call_ended",
     )
+
+
+UNRESOLVED_RESOLUTIONS = {
+    None,
+    "not_resolved",
+    "unclear",
+    "no_response_ended",
+    "no_answer",
+}
+
+
+@router.get("/unresolved")
+def list_unresolved_calls(org_id: str | None = None):
+    results = []
+    for state in all_calls():
+        if org_id and state.get("org_id") != org_id:
+            continue
+        if not state["ended"]:
+            continue
+        if state["resolution"] in UNRESOLVED_RESOLUTIONS:
+            results.append({
+                "call_id": state["call_id"],
+                "customer_name": state["customer_name"],
+                "org_id": state["org_id"],
+                "resolution": state["resolution"],
+                "transcript_preview": state["transcript"][-1]["text"] if state["transcript"] else None,
+            })
+    return {"count": len(results), "unresolved_calls": results}
