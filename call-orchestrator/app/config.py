@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     # Bedrock
     # =========================
     bedrock_model_id: str = (
-        "anthropic.claude-3-haiku-20240307-v1:0"
+        "us.anthropic.claude-haiku-4-5-20251001-v1:0"
     )
 
     # =========================

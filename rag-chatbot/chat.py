@@ -26,7 +26,7 @@ from ingestion import search_chunks
 from ticket_service import create_ticket_record, TicketError
 from personas import build_system_prompt, get_persona_for_chat, DEFAULT_PERSONA_TEXT, HEADER, PERSONA_GUARD
 
-CHAT_MODEL_ID = os.getenv("CHAT_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
+CHAT_MODEL_ID = os.getenv("CHAT_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
 CITATION_THRESHOLD = 0.35
 MAX_TOOL_ITERATIONS = 5
 

@@ -64,6 +64,59 @@ class ChatRequest(BaseModel):
     query: str
     history: list[dict] = []
 
+
+
+class TTSRequest(BaseModel):
+    text: str
+
+@app.post("/tts")
+def tts_endpoint(request: TTSRequest):
+    import boto3
+    import os
+    from fastapi.responses import StreamingResponse
+    import io
+    client = boto3.client("polly", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+    
+    try:
+        response = client.synthesize_speech(
+            Text=request.text,
+            OutputFormat='mp3',
+            VoiceId='Zeina',
+            Engine='standard',
+            LanguageCode='arb'
+        )
+        if "AudioStream" in response:
+            audio_stream = response["AudioStream"].read()
+            return StreamingResponse(io.BytesIO(audio_stream), media_type="audio/mpeg")
+        else:
+            raise HTTPException(status_code=500, detail="Could not stream audio")
+    except Exception as e:
+        print("TTS error:", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class STTCleanupRequest(BaseModel):
+    text: str
+
+@app.post("/cleanup-stt")
+def cleanup_stt(request: STTCleanupRequest):
+    import boto3
+    import os
+    client = boto3.client("bedrock-runtime", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+    
+    prompt = f"Fix any spelling, grammar, or phonetic errors in the following Arabic speech-to-text transcript. Apply self-corrections if the user says 'wait, no' etc. Output ONLY the corrected Arabic text without any explanations or formatting.\n\nTranscript: {request.text}"
+    
+    try:
+        response = client.converse(
+            modelId=os.environ.get("CHAT_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0"),
+            messages=[{"role": "user", "content": [{"text": prompt}]}]
+        )
+        cleaned_text = response["output"]["message"]["content"][0]["text"].strip()
+        return {"cleaned_text": cleaned_text}
+    except Exception as e:
+        print("Cleanup STT error:", e)
+        return {"cleaned_text": request.text}
+
 class IngestRequest(BaseModel):
     organization_id: str
     file_path: str
