@@ -133,6 +133,7 @@ function initChatbot(containerId) {
                 let isListening = false;
                 let fullTranscript = '';
 
+                
                 recognition.onstart = () => {
                     console.log("STT: Microphone started listening");
                     isListening = true;
@@ -140,6 +141,11 @@ function initChatbot(containerId) {
                     if (micBtn) {
                         micBtn.classList.remove('text-gray-400');
                         micBtn.classList.add('text-red-500', 'animate-pulse');
+                    }
+                    const sendBtn = document.getElementById('sendBtn');
+                    if (sendBtn) {
+                        sendBtn.disabled = true;
+                        sendBtn.classList.add('opacity-50', 'cursor-not-allowed');
                     }
                     chatInput.placeholder = "جاري الاستماع...";
                 };
@@ -220,6 +226,12 @@ function initChatbot(containerId) {
                         });
                     } else {
                         chatInput.placeholder = "اكتب رسالتك هنا...";
+                        chatInput.disabled = false;
+                        const sendBtn = document.getElementById('sendBtn');
+                        if (sendBtn) {
+                            sendBtn.disabled = false;
+                            sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                        }
                     }
                 };
 
@@ -240,7 +252,31 @@ function initChatbot(containerId) {
 
 
             // --- TTS (Text-To-Speech) Logic using AWS Polly Backend ---
-            async function playTTS(text) {
+            let currentAudio = null;
+            let currentSpeakerBtn = null;
+
+            async function playTTS(text, btnElement) {
+                // If something is currently playing, stop it
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                    if (currentSpeakerBtn) {
+                        currentSpeakerBtn.innerHTML = '🔊';
+                    }
+                    
+                    // If the user clicked the same button that was playing, just stop and return
+                    if (currentSpeakerBtn === btnElement) {
+                        currentAudio = null;
+                        currentSpeakerBtn = null;
+                        return;
+                    }
+                }
+
+                currentSpeakerBtn = btnElement;
+                if (currentSpeakerBtn) {
+                    currentSpeakerBtn.innerHTML = '⏳'; // Loading state
+                }
+
                 try {
                     const response = await fetch("http://localhost:8002/tts", {
                         method: "POST",
@@ -251,10 +287,26 @@ function initChatbot(containerId) {
                     
                     const blob = await response.blob();
                     const audioUrl = URL.createObjectURL(blob);
-                    const audio = new Audio(audioUrl);
-                    audio.play();
+                    currentAudio = new Audio(audioUrl);
+                    
+                    currentAudio.onended = () => {
+                        if (currentSpeakerBtn === btnElement) {
+                            currentSpeakerBtn.innerHTML = '🔊';
+                            currentAudio = null;
+                            currentSpeakerBtn = null;
+                        }
+                    };
+
+                    currentAudio.play();
+                    
+                    if (currentSpeakerBtn === btnElement) {
+                        currentSpeakerBtn.innerHTML = '⏹️'; // Stop state
+                    }
                 } catch (error) {
                     console.error("Error playing TTS:", error);
+                    if (currentSpeakerBtn === btnElement) {
+                        currentSpeakerBtn.innerHTML = '🔊';
+                    }
                 }
             }
 
@@ -271,10 +323,10 @@ function initChatbot(containerId) {
                         </div>
                     `;
                 } else {
-                    let feedbackHtml = '';
+                                        let feedbackHtml = '';
                     if (interactionId) {
                         feedbackHtml = `
-                            <div class="flex gap-4 mt-2 mr-1 opacity-70 hover:opacity-100 transition-opacity">
+                            <div class="flex gap-4 opacity-70 hover:opacity-100 transition-opacity">
                                 <button type="button" class="feedback-btn hover:text-[#177a94] text-lg transition-transform hover:scale-110" data-id="${interactionId}" data-rating="up">👍</button>
                                 <button type="button" class="feedback-btn hover:text-red-500 text-lg transition-transform hover:scale-110" data-id="${interactionId}" data-rating="down">👎</button>
                             </div>
@@ -286,12 +338,23 @@ function initChatbot(containerId) {
                         <div class="bg-white border border-gray-200 px-4 py-2.5 rounded-2xl rounded-tr-sm shadow-sm text-sm text-gray-800 text-right max-w-[85%] leading-relaxed">
                             ${text}
                         </div>
-                        ${feedbackHtml}
+                        <div class="flex items-center gap-4 mt-2 mr-1">
+                            <button type="button" class="speaker-btn hover:text-[#177a94] text-lg transition-transform hover:scale-110" title="استمع">🔊</button>
+                            ${feedbackHtml}
+                        </div>
                     `;
                 }
                 
                 chatBox.appendChild(messageDiv);
                 chatBox.scrollTop = chatBox.scrollHeight;
+
+                // Bind speaker buttons
+                const speakerBtns = messageDiv.querySelectorAll('.speaker-btn');
+                speakerBtns.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        playTTS(text, e.currentTarget);
+                    });
+                });
 
                 // Bind feedback buttons
                 if (interactionId) {
@@ -325,8 +388,13 @@ function initChatbot(containerId) {
 
             let chatHistory = [];
 
-            chatForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
+                        chatForm.addEventListener('submit', async (e) => {
+                  e.preventDefault();
+                  
+                  // Block submission if STT is active or cleaning up
+                  const sendBtn = document.getElementById('sendBtn');
+                  if (sendBtn && sendBtn.disabled) return;
+
                 const text = chatInput.value.trim();
                 if(!text) return;
 
@@ -359,7 +427,7 @@ function initChatbot(containerId) {
                     loadingIndicator.classList.add("hidden");
                     const aiText = data.answer || data.response || data.message || data.text || "تم الاستلام بنجاح.";
                     appendMessage('ai', aiText, data.interaction_id);
-                    playTTS(aiText);
+                    
 
                     // Update memory
                     chatHistory.push({ role: 'user', content: [{ text: text }] });
