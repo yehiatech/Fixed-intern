@@ -81,9 +81,9 @@ def tts_endpoint(request: TTSRequest):
         response = client.synthesize_speech(
             Text=request.text,
             OutputFormat='mp3',
-            VoiceId='Zeina',
-            Engine='standard',
-            LanguageCode='arb'
+            VoiceId='Hala',
+            Engine='neural',
+            LanguageCode='ar-AE'
         )
         if "AudioStream" in response:
             audio_stream = response["AudioStream"].read()
