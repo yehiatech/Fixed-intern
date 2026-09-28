@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 import ticket_service as svc
+import personas as persona_svc
 
 router = APIRouter(prefix="/api/organizations/{org_id}", tags=["dashboard"])
 
@@ -40,6 +41,12 @@ class AgentCreate(BaseModel):
     username: str
     password: str
     full_name: Optional[str] = None
+
+
+class PersonaSelect(BaseModel):
+    persona_id: Optional[str] = None   # a preset id (or this org's custom id); null = reset to default
+    custom_text: Optional[str] = None  # if set, saves + selects this org's custom persona
+    custom_name: Optional[str] = None
 
 
 class AdminCreate(BaseModel):
@@ -96,3 +103,13 @@ def post_admin(org_id: str, body: AdminCreate):
 def delete_member(org_id: str, user_id: str):
     return _run(svc.delete_member, org_id, user_id)
 
+
+# ---- chatbot persona (how the bot talks; the safety/escalation rules never change)
+@router.get("/personas")
+def get_personas(org_id: str):
+    return _run(persona_svc.list_personas, org_id)
+
+
+@router.put("/persona")
+def put_persona(org_id: str, body: PersonaSelect):
+    return _run(persona_svc.select_persona, org_id, body.persona_id, body.custom_text, body.custom_name)

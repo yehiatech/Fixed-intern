@@ -24,6 +24,21 @@ ADDITIVE_SQL = [
     "CREATE SEQUENCE IF NOT EXISTS ticket_number_seq START 1001;",
     "CREATE INDEX IF NOT EXISTS idx_support_tickets_org ON support_tickets(organization_id);",
     "CREATE INDEX IF NOT EXISTS idx_support_tickets_agent ON support_tickets(agent_id);",
+    # Chatbot personas: built-in presets (is_preset, organization_id NULL) + at most one custom per org.
+    """CREATE TABLE IF NOT EXISTS personas (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+        preset_key VARCHAR(50),
+        name VARCHAR(100) NOT NULL,
+        description TEXT,
+        prompt_text TEXT NOT NULL,
+        is_preset BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );""",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_personas_preset_key ON personas(preset_key) WHERE is_preset;",
+    "CREATE UNIQUE INDEX IF NOT EXISTS uq_personas_org_custom ON personas(organization_id) WHERE NOT is_preset;",
+    # NULL = the default persona (the tone the bot always had).
+    "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS persona_id UUID REFERENCES personas(id) ON DELETE SET NULL;",
 ]
 
 
@@ -55,6 +70,9 @@ def ensure_schema() -> None:
         conn.close()
 
     seed_defaults()
+
+    from personas import seed_presets
+    seed_presets()
 
 
 def seed_defaults() -> None:
