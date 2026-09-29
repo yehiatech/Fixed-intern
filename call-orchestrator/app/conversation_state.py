@@ -1,75 +1,116 @@
-"""
-T-12: in-memory conversation state per call_id. Holds the Bedrock message
-history (needed for multi-turn converse() calls), the transcript, and the
-outcome fields /calls/result needs to answer per the API contract.
+"""Call state: same API as before (voice.py / calls.py need no changes),
+but every change is now also saved to a SQLite file, so results survive
+server restarts and the admin can still see them afterwards.
 
-Replaced by real call_logs DB reads/writes in T-13 — the shape of this
-dict is deliberately close to the call_logs columns so that swap is easy.
+get_state() still returns a mutable dict; assigning any top-level key
+(state["ended"] = True, state["resolution"] = "...") autosaves.
 """
-from typing import Any
+import json
+import logging
+import os
+import sqlite3
 import threading
+from datetime import datetime, timezone
+from typing import Any, Optional
 
-_calls: dict[str, dict[str, Any]] = {}
-_state_lock = threading.Lock()
+logger = logging.getLogger(__name__)
 
-def _cleanup_old_calls():
-    # Naive cleanup: if we exceed 1000 calls, remove the oldest 200
-    if len(_calls) > 1000:
-        keys_to_delete = list(_calls.keys())[:200]
-        for k in keys_to_delete:
-            del _calls[k]
-
-def init_call(call_id: str, customer_name: str, org_id: str, ticket_id: str) -> dict[str, Any]:
-    with _state_lock:
-        _cleanup_old_calls()
-        state = {
-            "customer_name": customer_name,
-            "org_id": org_id,
-            "ticket_id": ticket_id,
-            "messages": [],       # Bedrock converse() message history
-            "transcript": "",     # human-readable transcript for /calls/result
-            "tools_used": [],
-            "resolution": None,
-            "sentiment": None,
-            "ended": False,
-            "transferred": False,
-            "no_input_retries": 0,
-        }
-        _calls[call_id] = state
-        return state
+DB_PATH = os.environ.get("CALLS_DB_PATH", "calls.db")
+_lock = threading.RLock()
+_conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+_conn.execute(
+    """CREATE TABLE IF NOT EXISTS call_state (
+        call_id    TEXT PRIMARY KEY,
+        org_id     TEXT,
+        ended      INTEGER NOT NULL DEFAULT 0,
+        resolution TEXT,
+        data       TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )"""
+)
+_conn.commit()
 
 
-def get_state(call_id: str) -> dict[str, Any] | None:
-    # Read-only access doesn't strictly need a lock for dict lookup due to GIL, 
-    # but mutations to the returned state should be locked.
-    return _calls.get(call_id)
+class _State(dict):
+    """dict that saves itself whenever a top-level key is assigned."""
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        _save(self)
+
+
+def _save(state: dict) -> None:
+    try:
+        with _lock:
+            _conn.execute(
+                "INSERT INTO call_state (call_id, org_id, ended, resolution, data, updated_at) "
+                "VALUES (?,?,?,?,?,?) ON CONFLICT(call_id) DO UPDATE SET "
+                "org_id=excluded.org_id, ended=excluded.ended, resolution=excluded.resolution, "
+                "data=excluded.data, updated_at=excluded.updated_at",
+                (
+                    state["call_id"], state.get("org_id"), int(bool(state.get("ended"))),
+                    state.get("resolution"), json.dumps(state, ensure_ascii=False),
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+            _conn.commit()
+    except Exception:
+        # never break a live call because saving failed
+        logger.exception("Failed to persist call %s", state.get("call_id"))
+
+
+def _load_all() -> dict[str, _State]:
+    with _lock:
+        rows = _conn.execute("SELECT data FROM call_state").fetchall()
+    return {(d := json.loads(r[0]))["call_id"]: _State(d) for r in rows}
+
+
+_calls: dict[str, _State] = _load_all()
+logger.info("Loaded %d saved calls from %s", len(_calls), DB_PATH)
 
 
 def exists(call_id: str) -> bool:
-    return call_id in _calls
+    with _lock:
+        return call_id in _calls
 
 
-def append_transcript(call_id: str, speaker: str, text: str) -> None:
-    with _state_lock:
-        state = _calls.get(call_id)
-        if state is not None:
-            state["transcript"] += f"{speaker}: {text}\n"
+def init_call(call_id: str, customer_name: str, org_id: str, ticket_id: str,
+              customer_phone: str = "") -> dict[str, Any]:
+    state = _State({
+        "call_id": call_id, "customer_name": customer_name, "customer_phone": customer_phone,
+        "org_id": org_id, "ticket_id": ticket_id,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "messages": [], "transcript": [], "no_input_retries": 0,
+        "ended": False, "transferred": False,
+        "resolution": None, "sentiment": None, "tools_used": [],
+    })
+    with _lock:
+        _calls[call_id] = state
+    _save(state)
+    return state
 
-def update_state_safe(call_id: str, resolution: str = None, sentiment: str = None, tools_used: list = None, ended: bool = None) -> bool:
-    with _state_lock:
-        state = _calls.get(call_id)
-        if not state:
-            return False
-        
-        if resolution is not None:
-            state["resolution"] = resolution
-        if sentiment is not None:
-            state["sentiment"] = sentiment
-        if tools_used is not None:
-            for t in tools_used:
-                if t not in state["tools_used"]:
-                    state["tools_used"].append(t)
-        if ended is not None:
-            state["ended"] = ended
-            
-        return True
+
+def get_state(call_id: str) -> Optional[dict[str, Any]]:
+    with _lock:
+        return _calls.get(call_id)
+
+
+def all_calls() -> list[dict[str, Any]]:
+    with _lock:
+        return list(_calls.values())
+
+
+def append_transcript(call_id: str, role: str, text: str) -> None:
+    state = get_state(call_id)
+    if state is None:
+        logger.warning("append_transcript: unknown call_id=%s", call_id)
+        return
+    state["transcript"].append({"role": role, "text": text})
+    _save(state)
+
+
+def clear_call(call_id: str) -> None:
+    with _lock:
+        _calls.pop(call_id, None)
+        _conn.execute("DELETE FROM call_state WHERE call_id=?", (call_id,))
+        _conn.commit()
