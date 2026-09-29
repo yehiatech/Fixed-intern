@@ -23,7 +23,7 @@ from app.schemas import (
     CallTriggerRequest,
     CallTriggerResponse,
 )
-
+from app.conversation_state import all_calls
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/calls", tags=["calls"])
@@ -45,13 +45,13 @@ def trigger_call(payload: CallTriggerRequest) -> CallTriggerResponse:
         )
 
 
-    init_call(
+        init_call(
         call_id=payload.call_id,
         customer_name=payload.customer_name,
         org_id=payload.org_id,
         ticket_id=payload.call_id,
+        customer_phone=payload.customer_phone,
     )
-
     settings = get_settings()
 
     if _is_dev_mode():
@@ -116,13 +116,43 @@ def get_call_result(call_id: str):
     if not state["ended"]:
         return CallResultInProgress(call_id=call_id, status="in_progress")
 
-    return CallResultCompleted(
+        return CallResultCompleted(
         call_id=call_id,
         status="completed",
         duration_seconds=int(time.time()) % 300,  # placeholder until real call timing lands in T-13
-        transcript=state["transcript"],
+        transcript="\n".join(f"{t['role']}: {t['text']}" for t in state["transcript"]),
         summary=f"Resolution: {state['resolution']}. Tools used: {', '.join(state['tools_used'])}.",
         sentiment=state["sentiment"] or "neutral",
         tools_used=state["tools_used"],
         resolution=state["resolution"] or "call_ended",
     )
+
+UNRESOLVED_RESOLUTIONS = {
+    None,
+    "not_resolved",
+    "unclear",
+    "no_response_ended",
+    "no_answer",
+    "hung_up",
+}
+
+
+@router.get("/unresolved")
+def list_unresolved_calls(org_id: str | None = None):
+    results = []
+    for state in all_calls():
+        if org_id and state.get("org_id") != org_id:
+            continue
+        if not state["ended"]:
+            continue
+        if state["resolution"] in UNRESOLVED_RESOLUTIONS:
+            results.append({
+                "call_id": state["call_id"],
+                "customer_name": state["customer_name"],
+                "customer_phone": state.get("customer_phone", ""),
+                "org_id": state["org_id"],
+                "resolution": state["resolution"],
+                "started_at": state.get("started_at"),
+                "transcript_preview": state["transcript"][-1]["text"] if state["transcript"] else None,
+            })
+    return {"count": len(results), "unresolved_calls": results}

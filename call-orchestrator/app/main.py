@@ -9,7 +9,8 @@ from app.config import get_settings
 from app.errors import APIError
 from app.routers import calls, health, voice
 from app.webhooks import router as webhooks_router
-
+from app.routers import call_events
+   
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
@@ -36,17 +37,8 @@ app.include_router(health.router)
 app.include_router(calls.router)
 app.include_router(voice.router)
 app.include_router(webhooks_router)
-
-@app.exception_handler(APIError)
-def api_error_handler(request: Request, exc: APIError) -> JSONResponse:
-    """Turns a raised APIError into the exact error shape T-07b specifies:
-    {"error": "...", "message": "...", "call_id": "..."} — not FastAPI's
-    default {"detail": "..."}.
-    """
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"error": exc.error, "message": exc.message, "call_id": exc.call_id},
-    )
+app.include_router(call_events.router)
+app.include_router(calls_unresolved.router)
 
 
 @app.exception_handler(APIError)
