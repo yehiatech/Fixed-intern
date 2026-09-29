@@ -27,7 +27,7 @@ function initChatbot(containerId) {
                 <div class="flex flex-col items-start w-full">
                     <span class="text-xs text-gray-500 mb-1 mr-1">المساعد الذكي</span>
                     <div class="bg-white border border-gray-200 px-4 py-2.5 rounded-2xl rounded-tr-sm shadow-sm text-sm text-gray-800 max-w-[85%] leading-relaxed">
-                        مرحباً! أنا المساعد الذكي الخاص بك. كيف يمكنني مساعدتك في استفساراتك اليوم؟
+                        أهلا بيك، أنا المساعد الذكي لخدمة عملاء. إزاي أقدر أساعدك النهارده؟
                     </div>
                 </div>
 

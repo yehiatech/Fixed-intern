@@ -24,6 +24,7 @@ import requests
 from db import get_connection
 from ingestion import search_chunks
 from ticket_service import create_ticket_record, TicketError
+from personas import build_system_prompt, get_persona_for_chat, DEFAULT_PERSONA_TEXT, HEADER, PERSONA_GUARD
 
 CHAT_MODEL_ID = os.getenv("CHAT_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
 CITATION_THRESHOLD = 0.35
@@ -225,25 +226,9 @@ TOOL_CONFIG = {
     ]
 }
 
-SYSTEM_PROMPT = """أنت مساعد ذكي لخدمة العملاء. هدفك هو تقديم إجابات استباقية وسريعة للعملاء.
-
-تعليمات الشخصية والأسلوب (Persona & Tone):
-1. النبرة: كن ودوداً ومهنياً.
-2. التنسيق: اجعل إجاباتك قصيرة ومريحة للعين. استخدم النقط (Bullet points) للخطوات، وقم بتمييز الكلمات المهمة بخط عريض (**Bold**).
-3. الرموز التعبيرية: استخدم الرموز التعبيرية بشكل نادر جداً أو لا تستخدمها.
-4. الشفافية: أنت ذكاء اصطناعي، لا تتظاهر بأنك إنسان.
-
-قواعد الاسترجاع من المعلومات والتصعيد (RAG & Escalation):
-1. ابحث دائماً في قاعدة المعرفة باستخدام الأداة (search_knowledge_base) قبل الإجابة على أي سؤال يخص الشركة أو السياسات.
-2. لا تخترع (Hallucinate) أي معلومات من خارج النصوص المسترجعة أبداً.
-3. عند تقديم معلومات من قاعدة المعرفة، حافظ على دقة المعلومات المرجعية.
-4. **هام جداً للتصعيد وفتح التذاكر**: عندما يطلب المستخدم التحدث إلى موظف بشري أو عندما تقرر أنه بحاجة لدعم بشري، يجب عليك جمع المعلومات التالية أولاً:
-   - الاسم
-   - رقم الهاتف
-   - وصف المشكلة
-   **لا تقم بإنشاء التذكرة أبداً إذا كانت أي من هذه المعلومات مفقودة.** استمر في سؤاله بلباقة عن المعلومات الناقصة. بمجرد توفر المعلومات الثلاثة، استخدم أداة (create_ticket) لإنشاء التذكرة فوراً، ثم أكد له أنه سيتم التواصل معه.
-
-استخدم lookup_ticket أو check_order_status أو create_ticket عند الحاجة."""
+# Default prompt (default persona). Per-organization prompts are built with
+# build_system_prompt(persona_text) - see personas.py.
+SYSTEM_PROMPT = build_system_prompt(DEFAULT_PERSONA_TEXT)
 
 
 def _bedrock_client():
@@ -258,6 +243,8 @@ def _run_tool_loop(query: str, organization_id: str, history: list = None) -> tu
         history = []
     client = _bedrock_client()
     messages = history + [{"role": "user", "content": [{"text": query}]}]
+    persona_text, _ = get_persona_for_chat(organization_id)
+    system_prompt = build_system_prompt(persona_text)
 
     best_kb_similarity = None
     used_kb_tool = False
@@ -270,7 +257,7 @@ def _run_tool_loop(query: str, organization_id: str, history: list = None) -> tu
 
         response = client.converse(
             modelId=CHAT_MODEL_ID,
-            system=[{"text": SYSTEM_PROMPT}],
+            system=[{"text": system_prompt}],
             messages=messages,
             toolConfig=tool_config,
         )
@@ -350,6 +337,24 @@ def _log_interaction(organization_id, user_id, query_text, answer_text,
         conn.close()
 
 
+def _apply_persona(chunk_text: str, query: str, persona_text: str) -> str:
+    """Re-word a knowledge-base passage in the org's persona. Facts come only
+    from the passage. Any failure returns the passage unchanged."""
+    try:
+        response = _bedrock_client().converse(
+            modelId=CHAT_MODEL_ID,
+            system=[{"text": HEADER + persona_text + PERSONA_GUARD +
+                     "أعد صياغة النص المرجعي التالي كإجابة على سؤال العميل بالأسلوب المطلوب، "
+                     "واعتمد فقط على المعلومات الموجودة في النص دون إضافة أي معلومة جديدة."}],
+            messages=[{"role": "user", "content": [{"text": f"سؤال العميل: {query}\n\nالنص المرجعي:\n{chunk_text}"}]}],
+        )
+        parts = [b["text"] for b in response["output"]["message"]["content"] if "text" in b]
+        rephrased = " ".join(parts).strip()
+        return rephrased or chunk_text
+    except Exception:
+        return chunk_text
+
+
 def handle_chat(query: str, organization_id: str, user_id: str | None = None, history: list = None) -> dict:
     if history is None:
         history = []
@@ -387,6 +392,9 @@ def handle_chat(query: str, organization_id: str, user_id: str | None = None, hi
         top = max(direct_results, key=lambda r: r["similarity"])
         if top["similarity"] >= CITATION_THRESHOLD:
             answer = top["chunk_text"]
+            persona_text, custom_choice = get_persona_for_chat(organization_id)
+            if custom_choice:
+                answer = _apply_persona(answer, query, persona_text)
             best_similarity = top["similarity"]
             best_kb_result = top
             used_kb_tool = True
