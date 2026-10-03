@@ -6,13 +6,17 @@ T-17: /chat endpoint logic.
 2. Direct RAG   -> try a direct knowledge-base search first; if the top
                    match already clears the citation threshold, answer
                    from it without spending a Bedrock generation call.
-3. Tool-calling -> otherwise fall back to Bedrock `converse` + 4 tools;
+3. Tool-calling -> otherwise fall back to Bedrock `converse` + 5 tools;
                    the model decides which tool(s) to call.
 4. Citation     -> similarity >= 0.75 = KB-grounded; else labeled fallback.
 5. Logging      -> every interaction saved to chat_interactions.
 
 Notes: check_order_status is a stub (no orders system yet).
 lookup_ticket calls the real EspoCRM API.
+query_structured_data answers counting/filtering questions over
+support_tickets by generating read-only SQL (see sql_query.py) - it does
+NOT have access to the users table or any other org's rows (enforced by
+Postgres row-level security, not by this file).
 """
 import os
 import json
@@ -24,7 +28,8 @@ import requests
 from db import get_connection
 from ingestion import search_chunks
 from ticket_service import create_ticket_record, TicketError
-from personas import build_system_prompt, get_persona_for_chat, DEFAULT_PERSONA_TEXT, HEADER, PERSONA_GUARD
+from sql_query import run_structured_query
+
 
 CHAT_MODEL_ID = os.getenv("CHAT_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
 CITATION_THRESHOLD = 0.35
@@ -96,6 +101,15 @@ def _tool_check_order_status(tool_input: dict, organization_id: str) -> dict:
     return {"available": False, "message": "خدمة تتبع الطلبات غير متاحة حاليًا."}
 
 
+def _tool_query_structured_data(tool_input: dict, organization_id: str) -> dict:
+    """Natural-language question -> read-only SQL over support_tickets.
+    organization_id here always comes from the authenticated caller
+    (handle_chat's parameter), never from the model's tool_input, so the
+    model cannot ask for a different tenant's data through this path."""
+    question = tool_input.get("question", "")
+    return run_structured_query(question, organization_id, get_connection)
+
+
 def _messages_to_transcript(messages: list) -> list[dict]:
     """Plain-text copy of the conversation (tool calls/results dropped) for the ticket."""
     transcript = []
@@ -155,7 +169,7 @@ TOOL_FUNCTIONS = {
     "lookup_ticket": _tool_lookup_ticket,
     "check_order_status": _tool_check_order_status,
     "create_ticket": _tool_create_ticket,
-    
+    "query_structured_data": _tool_query_structured_data,
 }
 
 TOOL_CONFIG = {
@@ -222,13 +236,45 @@ TOOL_CONFIG = {
                 },
             }
         },
-        
+        {
+            "toolSpec": {
+                "name": "query_structured_data",
+                "description": "Answer questions that need counting, filtering, or listing support tickets (e.g. 'كام تذكرة مفتوحة؟', 'اعرض التذاكر اللي لسه معلقة', 'how many tickets today'). Do NOT use this for policy/document questions - use search_knowledge_base for those instead.",
+                "inputSchema": {
+                    "json": {
+                        "type": "object",
+                        "properties": {
+                            "question": {"type": "string", "description": "السؤال كما طرحه المستخدم، بنفس لغته."}
+                        },
+                        "required": ["question"],
+                    }
+                },
+            }
+        },
+
     ]
 }
 
-# Default prompt (default persona). Per-organization prompts are built with
-# build_system_prompt(persona_text) - see personas.py.
-SYSTEM_PROMPT = build_system_prompt(DEFAULT_PERSONA_TEXT)
+SYSTEM_PROMPT = """أنت مساعد ذكي لخدمة العملاء. هدفك هو تقديم إجابات استباقية وسريعة للعملاء.
+
+تعليمات الشخصية والأسلوب (Persona & Tone):
+1. النبرة: كن ودوداً ومهنياً.
+2. التنسيق: اجعل إجاباتك قصيرة ومريحة للعين. استخدم النقط (Bullet points) للخطوات، وقم بتمييز الكلمات المهمة بخط عريض (**Bold**).
+3. الرموز التعبيرية: استخدم الرموز التعبيرية بشكل نادر جداً أو لا تستخدمها.
+4. الشفافية: أنت ذكاء اصطناعي، لا تتظاهر بأنك إنسان.
+
+قواعد الاسترجاع من المعلومات والتصعيد (RAG & Escalation):
+1. ابحث دائماً في قاعدة المعرفة باستخدام الأداة (search_knowledge_base) قبل الإجابة على أي سؤال يخص الشركة أو السياسات.
+2. لا تخترع (Hallucinate) أي معلومات من خارج النصوص المسترجعة أبداً.
+3. عند تقديم معلومات من قاعدة المعرفة، حافظ على دقة المعلومات المرجعية.
+4. **هام جداً للتصعيد وفتح التذاكر**: عندما يطلب المستخدم التحدث إلى موظف بشري أو عندما تقرر أنه بحاجة لدعم بشري، يجب عليك جمع المعلومات التالية أولاً:
+   - الاسم
+   - رقم الهاتف
+   - وصف المشكلة
+   **لا تقم بإنشاء التذكرة أبداً إذا كانت أي من هذه المعلومات مفقودة.** استمر في سؤاله بلباقة عن المعلومات الناقصة. بمجرد توفر المعلومات الثلاثة، استخدم أداة (create_ticket) لإنشاء التذكرة فوراً، ثم أكد له أنه سيتم التواصل معه.
+
+استخدم lookup_ticket أو check_order_status أو create_ticket عند الحاجة.
+استخدم query_structured_data فقط للأسئلة التي تحتاج عد أو تصفية أو سرد للتذاكر (مثل "كام تذكرة مفتوحة؟")."""
 
 
 def _bedrock_client():
@@ -439,4 +485,3 @@ def submit_feedback(interaction_id: str, rating: str) -> dict:
         raise ValueError(f"Failed to submit feedback: {str(e)}")
     finally:
         conn.close()
-

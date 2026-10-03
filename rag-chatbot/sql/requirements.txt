@@ -1,0 +1,4 @@
+sqlalchemy>=2.0
+sqlglot>=25.0
+openai>=1.30
+psycopg2-binary   # PostgreSQL driver  (or: pymysql for MySQL/MariaDB)
