@@ -28,7 +28,7 @@ import requests
 from db import get_connection
 from ingestion import search_chunks
 from ticket_service import create_ticket_record, TicketError
-from sql.sql_query import run_structured_query
+from sql_query import run_structured_query
 
 
 CHAT_MODEL_ID = os.getenv("CHAT_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
