@@ -54,6 +54,7 @@ Rules:
 - Output ONLY one {dialect} SELECT statement. No explanations, no markdown.
 - Use ONLY the tables and columns in the schema below. Never invent names.
 - Never write INSERT/UPDATE/DELETE/DDL. Read-only queries only.
+- Per-organization filtering is applied automatically by the system; never add a filter on organization_id yourself.
 - The question may be in Arabic (Egyptian dialect or MSA) or English. Column and table names are
   in the schema language. Text values in the data may be Arabic or English; for text filters
   prefer LIKE with wildcards over strict equality.

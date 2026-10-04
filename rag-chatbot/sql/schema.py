@@ -6,11 +6,13 @@ from functools import lru_cache
 from typing import NamedTuple
 
 from sqlalchemy import create_engine, inspect
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import URL, Engine
 
 _SCHEMA_TTL_SECONDS = 600
 _lock = threading.Lock()
 _cache = {"info": None, "ts": 0.0}
+
+TENANT_COLUMN = os.getenv("SQL_TENANT_COLUMN", "organization_id")
 
 _DIALECT_MAP = {
     "postgresql": "postgres",
@@ -23,38 +25,57 @@ _DIALECT_MAP = {
 
 
 class SchemaInfo(NamedTuple):
-    text: str              # human/LLM readable schema description
-    tables: frozenset      # lower-cased table names the LLM is allowed to query
+    text: str               # readable schema description for the LLM
+    tables: frozenset       # lower-cased tables the LLM may query
+    tenant_tables: frozenset  # subset that has the tenant column (auto-filtered per organization)
+
+
+def _database_url():
+    """SQL_DATABASE_URL if set, otherwise build it from the app's existing DB_* variables."""
+    url = os.getenv("SQL_DATABASE_URL")
+    if url:
+        return url
+    host, name = os.getenv("DB_HOST"), os.getenv("DB_NAME")
+    if not (host and name):
+        raise RuntimeError(
+            "Set SQL_DATABASE_URL, or the existing DB_HOST / DB_NAME / DB_USER / DB_PASSWORD variables."
+        )
+    return URL.create(
+        "postgresql+psycopg2",
+        # SQL_DB_USER / SQL_DB_PASSWORD let you use a dedicated READ-ONLY user (recommended)
+        username=os.getenv("SQL_DB_USER") or os.getenv("DB_USER"),
+        password=os.getenv("SQL_DB_PASSWORD") or os.getenv("DB_PASSWORD"),
+        host=host,
+        port=int(os.getenv("DB_PORT", "5432")),
+        database=name,
+    )
 
 
 @lru_cache(maxsize=1)
 def get_engine() -> Engine:
-    url = os.getenv("SQL_DATABASE_URL")
-    if not url:
-        raise RuntimeError("SQL_DATABASE_URL is not set in the environment / .env")
-    return create_engine(url, pool_pre_ping=True, pool_recycle=1800)
+    # Dedicated engine/pool: never shared with the rest of the application.
+    return create_engine(_database_url(), pool_pre_ping=True, pool_recycle=1800)
 
 
 def get_dialect() -> str:
-    """Dialect name in sqlglot's vocabulary."""
     name = get_engine().dialect.name
     return _DIALECT_MAP.get(name, name)
 
 
 def _build_schema() -> SchemaInfo:
-    engine = get_engine()
-    insp = inspect(engine)
-
     explicit = {
         t.strip().lower()
         for t in os.getenv("SQL_ALLOWED_TABLES", "").split(",")
         if t.strip()
     }
-    names = sorted(insp.get_table_names() + insp.get_view_names())
-    if explicit:
-        names = [n for n in names if n.lower() in explicit]
+    if not explicit:
+        # Fail closed: never expose the whole application database by accident.
+        raise RuntimeError("Set SQL_ALLOWED_TABLES to the tables the chatbot may query.")
 
-    blocks = []
+    insp = inspect(get_engine())
+    names = [n for n in sorted(insp.get_table_names() + insp.get_view_names()) if n.lower() in explicit]
+
+    blocks, tenant = [], set()
     for table in names:
         pk_cols = set(insp.get_pk_constraint(table).get("constrained_columns") or [])
         fk_map = {}
@@ -64,6 +85,8 @@ def _build_schema() -> SchemaInfo:
 
         cols = []
         for c in insp.get_columns(table):
+            if c["name"].lower() == TENANT_COLUMN.lower():
+                tenant.add(table.lower())
             line = f"{c['name']} {c['type']}"
             if c["name"] in pk_cols:
                 line += " PRIMARY KEY"
@@ -72,14 +95,16 @@ def _build_schema() -> SchemaInfo:
             if c.get("comment"):
                 line += f" /* {c['comment']} */"
             cols.append(line)
-
         blocks.append(f"TABLE {table} (\n  " + ",\n  ".join(cols) + "\n)")
 
-    return SchemaInfo("\n\n".join(blocks), frozenset(n.lower() for n in names))
+    return SchemaInfo(
+        "\n\n".join(blocks),
+        frozenset(n.lower() for n in names),
+        frozenset(tenant),
+    )
 
 
 def get_schema(force_refresh: bool = False) -> SchemaInfo:
-    """Cached schema (refreshed every 10 min or on demand)."""
     with _lock:
         stale = time.time() - _cache["ts"] > _SCHEMA_TTL_SECONDS
         if force_refresh or _cache["info"] is None or stale:

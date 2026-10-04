@@ -1,4 +1,5 @@
-"""Safety layer: only a single, read-only SELECT on allowed tables may reach the database."""
+"""Safety layer: only a single, read-only SELECT on allowed tables may reach the database.
+Also enforces multi-tenant isolation by wrapping tenant tables in an organization filter."""
 import re
 
 import sqlglot
@@ -27,11 +28,18 @@ _DANGEROUS_PATTERN = re.compile(
 )
 
 
-def validate_sql(sql: str, dialect: str, allowed_tables: frozenset, max_rows: int) -> str:
-    """Return a safe, re-generated SQL string (with enforced LIMIT) or raise SQLValidationError."""
+def validate_sql(
+    sql: str,
+    dialect: str,
+    allowed_tables: frozenset,
+    max_rows: int,
+    tenant_tables: frozenset = frozenset(),
+    organization_id=None,
+    tenant_column: str = "organization_id",
+) -> str:
+    """Return a safe, re-generated SQL string or raise SQLValidationError."""
     if not sql or not sql.strip():
         raise SQLValidationError("Empty query.")
-
     if _DANGEROUS_PATTERN.search(sql):
         raise SQLValidationError("Query touches restricted system objects.")
 
@@ -54,10 +62,8 @@ def validate_sql(sql: str, dialect: str, allowed_tables: frozenset, max_rows: in
 
         if isinstance(node, _FORBIDDEN_NODES):
             raise SQLValidationError(f"Forbidden operation: {type(node).__name__}.")
-
         if isinstance(node, exp.Anonymous) and node.name.lower() in _FORBIDDEN_FUNCS:
             raise SQLValidationError(f"Forbidden function: {node.name}.")
-
         if isinstance(node, exp.Table):
             if node.args.get("db") or node.args.get("catalog"):
                 raise SQLValidationError("Schema/database-qualified tables are not allowed.")
@@ -65,7 +71,24 @@ def validate_sql(sql: str, dialect: str, allowed_tables: frozenset, max_rows: in
             if name and name not in cte_names and name not in allowed_tables:
                 raise SQLValidationError(f"Table '{node.name}' is not allowed.")
 
-    # Enforce a row cap
+    # ---- multi-tenant isolation: every tenant table becomes (SELECT * FROM t WHERE org = X) AS t
+    tenant_refs = [
+        t for t in tree.find_all(exp.Table)
+        if t.name.lower() in tenant_tables and t.name.lower() not in cte_names
+    ]
+    if tenant_refs:
+        if organization_id in (None, ""):
+            raise SQLValidationError("organization_id is required to query this data.")
+        for tbl in tenant_refs:
+            inner = exp.select("*").from_(exp.to_table(tbl.name)).where(
+                exp.column(tenant_column).eq(exp.Literal.string(str(organization_id)))
+            )
+            alias = tbl.alias or tbl.name
+            tbl.replace(
+                exp.Subquery(this=inner, alias=exp.TableAlias(this=exp.to_identifier(alias)))
+            )
+
+    # ---- row cap
     limit = tree.args.get("limit")
     current = None
     if limit is not None:
@@ -76,5 +99,5 @@ def validate_sql(sql: str, dialect: str, allowed_tables: frozenset, max_rows: in
     if current is None or current > max_rows:
         tree = tree.limit(max_rows)
 
-    # We execute the *regenerated* SQL (comments stripped, normalized), not the raw LLM text.
+    # We execute the *regenerated* SQL (comments stripped, normalized), never the raw LLM text.
     return tree.sql(dialect=dialect)
