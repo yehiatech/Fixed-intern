@@ -26,3 +26,12 @@ AFTER the persona and cannot be switched off by it.
   persona, that passage is now re-worded by one extra Bedrock call (facts only from the
   passage; on any error the raw passage is returned). Default orgs are unchanged.
 - If reading personas from the DB fails, chat falls back to the default persona.
+
+## Chat user can pick the persona
+The person chatting (chat widget and the dashboard chatbot) can pick the style from a
+dropdown in the chat header. Empty choice = the organization's persona (previous behaviour).
+- `GET  /chat/personas?organization_id=...` -> presets + this org's custom persona (id/name/description only)
+- `POST /chat` accepts an optional `persona_id`. It is only honored if it is a preset or THIS
+  organization's custom persona; anything else falls back to the organization's persona.
+- The fixed rules (`CORE_RULES`) are still appended after whichever persona is used.
+- The choice is remembered in the browser (`localStorage`, key `chat_persona_<org id>`).

@@ -14,6 +14,7 @@ function initChatbot(containerId) {
                         <p class="text-[10px] text-blue-100 uppercase tracking-wider">متصل الآن</p>
                     </div>
                 </div>
+                <select id="personaSelect" title="أسلوب المساعد" aria-label="أسلوب المساعد" style="display:none" class="text-xs text-gray-800 bg-white rounded-md px-2 py-1 border-0 focus:outline-none cursor-pointer max-w-[130px]"></select>
                 <span class="flex h-3 w-3 relative">
                     <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500 border-2 border-white"></span>
@@ -71,6 +72,40 @@ function initChatbot(containerId) {
             const chatInput = document.getElementById('chatInput');
             const chatBox = document.getElementById('chatBox');
             const loadingIndicator = document.getElementById('loadingIndicator');
+
+            // -- Persona picker: the user chooses how the assistant talks.
+            // Empty value = the organization's own persona (the previous behaviour).
+            const personaSelect = document.getElementById('personaSelect');
+            const PERSONA_KEY = 'chat_persona_' + SESSION.organization_id;
+            const PERSONA_LABELS = { "default": "ودود ومحترف", "formal": "رسمي", "concise": "مختصر", "enthusiastic": "حماسي" };
+            const getPersonaId = () => (personaSelect && personaSelect.value) || null;
+
+            (async function loadPersonas() {
+                try {
+                    const res = await fetch("http://localhost:8002/chat/personas?organization_id=" + encodeURIComponent(SESSION.organization_id));
+                    if (!res.ok) return;
+                    const list = ((await res.json()).personas) || [];
+                    if (!list.length) return;       // nothing to choose -> keep the selector hidden
+                    personaSelect.innerHTML = '';
+                    const def = document.createElement('option');
+                    def.value = ''; def.textContent = 'الأسلوب الافتراضي';
+                    personaSelect.appendChild(def);
+                    list.forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = p.id;
+                        opt.textContent = p.is_custom ? (p.name || 'مخصص') : (PERSONA_LABELS[p.key] || p.name);
+                        if (p.description) opt.title = p.description;
+                        personaSelect.appendChild(opt);
+                    });
+                    let saved = null;
+                    try { saved = localStorage.getItem(PERSONA_KEY); } catch (_) {}
+                    if (saved && list.some(p => p.id === saved)) personaSelect.value = saved;
+                    personaSelect.style.display = '';
+                    personaSelect.addEventListener('change', () => {
+                        try { localStorage.setItem(PERSONA_KEY, personaSelect.value); } catch (_) {}
+                    });
+                } catch (e) { console.warn('Personas unavailable:', e); }
+            })();
 
             // -- File Upload Logic --
             const pdfUploadInput = document.getElementById('pdfUploadInput');
@@ -310,6 +345,16 @@ function initChatbot(containerId) {
                 }
             }
 
+            // Safe renderer: escapes HTML (prevents injection), then supports **bold**, line breaks and "- " bullets.
+            function renderText(raw) {
+                const esc = String(raw ?? '')
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                return esc
+                    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/^\s*[-*]\s+/gm, '\u2022 ')
+                    .replace(/\n/g, '<br>');
+            }
+
             function appendMessage(sender, text, interactionId = null) {
                 const messageDiv = document.createElement('div');
                 // RTL Layout adjustments: User is on the left (items-end), AI is on the right (items-start)
@@ -319,7 +364,7 @@ function initChatbot(containerId) {
                     messageDiv.innerHTML = `
                         <span class="text-xs text-gray-500 mb-1 ml-1">أنت</span>
                         <div class="bg-[#177a94] text-white px-4 py-2.5 rounded-2xl rounded-tl-sm shadow-sm text-sm max-w-[85%] text-right leading-relaxed">
-                            ${text}
+                            ${renderText(text)}
                         </div>
                     `;
                 } else {
@@ -336,7 +381,7 @@ function initChatbot(containerId) {
                     messageDiv.innerHTML = `
                         <span class="text-xs text-gray-500 mb-1 mr-1">المساعد الذكي</span>
                         <div class="bg-white border border-gray-200 px-4 py-2.5 rounded-2xl rounded-tr-sm shadow-sm text-sm text-gray-800 text-right max-w-[85%] leading-relaxed">
-                            ${text}
+                            ${renderText(text)}
                         </div>
                         <div class="flex items-center gap-4 mt-2 mr-1">
                             <button type="button" class="speaker-btn hover:text-[#177a94] text-lg transition-transform hover:scale-110" title="استمع">🔊</button>
@@ -417,6 +462,7 @@ function initChatbot(containerId) {
                             organization_id: SESSION.organization_id,
                             user_id: SESSION.user_id,
                             query: text,
+                            persona_id: getPersonaId(),
                             history: historyToSend
                         })
                     });
