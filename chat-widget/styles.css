@@ -172,3 +172,15 @@ body {
 .feedback-btn { background: none; border: none; cursor: pointer; opacity: 0.6; transition: opacity 0.2s; font-size: 14px; margin-right: 5px; }
 .feedback-btn:hover { opacity: 1; }
 .feedback-btn.selected { opacity: 1; transform: scale(1.1); }
+
+/* Persona picker (chat user chooses how the assistant talks) */
+.persona-select {
+    max-width: 120px;
+    font-size: 12px;
+    padding: 4px 6px;
+    border: 1px solid #d9d9d9;
+    border-radius: 6px;
+    background: #fff;
+    color: #177a94;
+    cursor: pointer;
+}

@@ -17,6 +17,46 @@ document.addEventListener("DOMContentLoaded", () => {
     const chatMessages = document.getElementById("chat-messages");
     const loadingIndicator = document.getElementById("loading-indicator");
 
+    // ---- Persona picker: the chat user chooses how the assistant talks.
+    // Empty value = the organization's own persona (the previous behaviour).
+    const personaSelect = document.getElementById("persona-select");
+    const PERSONA_KEY = "chat_persona_" + ORG_ID;
+    const PERSONA_LABELS = { "default": "ودود ومحترف", "formal": "رسمي", "concise": "مختصر", "enthusiastic": "حماسي" };
+    const getPersonaId = () => (personaSelect && personaSelect.value) || null;
+
+    async function loadPersonas() {
+        if (!personaSelect) return;
+        try {
+            const res = await fetch("http://localhost:8002/chat/personas?organization_id=" + encodeURIComponent(ORG_ID));
+            if (!res.ok) return;
+            const data = await res.json();
+            const list = data.personas || [];
+            if (!list.length) return;               // nothing to choose -> keep the selector hidden
+            personaSelect.innerHTML = "";
+            const def = document.createElement("option");
+            def.value = "";
+            def.textContent = "الأسلوب الافتراضي";
+            personaSelect.appendChild(def);
+            list.forEach(p => {
+                const opt = document.createElement("option");
+                opt.value = p.id;
+                opt.textContent = p.is_custom ? (p.name || "مخصص") : (PERSONA_LABELS[p.key] || p.name);
+                if (p.description) opt.title = p.description;
+                personaSelect.appendChild(opt);
+            });
+            let saved = null;
+            try { saved = localStorage.getItem(PERSONA_KEY); } catch (_) {}
+            if (saved && list.some(p => p.id === saved)) personaSelect.value = saved;
+            personaSelect.style.display = "";
+            personaSelect.addEventListener("change", () => {
+                try { localStorage.setItem(PERSONA_KEY, personaSelect.value); } catch (_) {}
+            });
+        } catch (e) {
+            console.warn("Personas unavailable:", e);   // chat keeps working with the default persona
+        }
+    }
+    loadPersonas();
+
     // Toggle Chat Window
     chatFab.addEventListener("click", () => {
         chatWindow.classList.toggle("hidden");
@@ -49,6 +89,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 body: JSON.stringify({
                     organization_id: ORG_ID,
                     query: text,
+                    persona_id: getPersonaId(),
                     history: [...chatHistory]
                 })
             });
