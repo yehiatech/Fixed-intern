@@ -28,7 +28,15 @@ import requests
 from db import get_connection
 from ingestion import search_chunks
 from ticket_service import create_ticket_record, TicketError
-from sql.sql_query import run_structured_query
+try:  # Text-to-SQL is optional: if it cannot load, the chatbot still works without it
+    from sql.sql_query import run_structured_query
+except Exception as _sql_err:
+    try:
+        from sql_query import run_structured_query
+    except Exception:
+        print(f"[chat] Text-to-SQL disabled (could not load): {_sql_err}")
+        run_structured_query = None
+from personas import build_system_prompt, resolve_persona, HEADER, PERSONA_GUARD
 
 
 CHAT_MODEL_ID = os.getenv("CHAT_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
@@ -107,6 +115,9 @@ def _tool_query_structured_data(tool_input: dict, organization_id: str) -> dict:
     (handle_chat's parameter), never from the model's tool_input, so the
     model cannot ask for a different tenant's data through this path."""
     question = tool_input.get("question", "")
+    if run_structured_query is None:
+        return {"status": "error", "answer": None,
+                "message": "عذرًا، تعذر الوصول إلى البيانات حاليًا. برجاء المحاولة لاحقًا."}
     return run_structured_query(question, organization_id, get_connection)
 
 
@@ -277,6 +288,27 @@ SYSTEM_PROMPT = """أنت مساعد ذكي لخدمة العملاء. هدفك 
 استخدم query_structured_data فقط للأسئلة التي تحتاج عد أو تصفية أو سرد للتذاكر (مثل "كام تذكرة مفتوحة؟")."""
 
 
+SQL_TOOL_NAME = "query_structured_data"
+SQL_PROMPT_HINT = ("\nاستخدم query_structured_data فقط للأسئلة التي تحتاج عد أو تصفية أو سرد للتذاكر "
+                   "(مثل \"كام تذكرة مفتوحة؟\").")
+
+
+def _sql_enabled() -> bool:
+    """The SQL tool is on only if its module loaded AND it is configured
+    (OPENAI_API_KEY + SQL_ALLOWED_TABLES). Otherwise the chatbot behaves exactly
+    as it did before the SQL feature existed."""
+    return (run_structured_query is not None
+            and bool(os.getenv("OPENAI_API_KEY"))
+            and bool(os.getenv("SQL_ALLOWED_TABLES")))
+
+
+def _active_tool_config() -> dict:
+    if _sql_enabled():
+        return TOOL_CONFIG
+    return {**TOOL_CONFIG,
+            "tools": [t for t in TOOL_CONFIG["tools"] if t["toolSpec"]["name"] != SQL_TOOL_NAME]}
+
+
 def _bedrock_client():
     region = os.getenv("AWS_REGION")
     if not region:
@@ -284,22 +316,23 @@ def _bedrock_client():
     return boto3.client("bedrock-runtime", region_name=region)
 
 
-def _run_tool_loop(query: str, organization_id: str, history: list = None) -> tuple[str, float | None, bool, dict | None]:
+def _run_tool_loop(query: str, organization_id: str, history: list = None,
+                   persona_id: str | None = None) -> tuple[str, float | None, bool, dict | None]:
     if history is None:
         history = []
     client = _bedrock_client()
     messages = history + [{"role": "user", "content": [{"text": query}]}]
-    persona_text, _ = get_persona_for_chat(organization_id)
-    system_prompt = build_system_prompt(persona_text)
+    persona_text, _ = resolve_persona(organization_id, persona_id)
+    system_prompt = build_system_prompt(persona_text) + (SQL_PROMPT_HINT if _sql_enabled() else "")
 
     best_kb_similarity = None
     used_kb_tool = False
     best_kb_result = None
 
     for i in range(MAX_TOOL_ITERATIONS):
-        tool_config = TOOL_CONFIG
+        tool_config = _active_tool_config()
         if i == 0:
-            tool_config = {**TOOL_CONFIG, "toolChoice": {"any": {}}}
+            tool_config = {**tool_config, "toolChoice": {"any": {}}}
 
         response = client.converse(
             modelId=CHAT_MODEL_ID,
@@ -401,7 +434,8 @@ def _apply_persona(chunk_text: str, query: str, persona_text: str) -> str:
         return chunk_text
 
 
-def handle_chat(query: str, organization_id: str, user_id: str | None = None, history: list = None) -> dict:
+def handle_chat(query: str, organization_id: str, user_id: str | None = None, history: list = None,
+                persona_id: str | None = None) -> dict:
     if history is None:
         history = []
     start = time.time()
@@ -438,7 +472,7 @@ def handle_chat(query: str, organization_id: str, user_id: str | None = None, hi
         top = max(direct_results, key=lambda r: r["similarity"])
         if top["similarity"] >= CITATION_THRESHOLD:
             answer = top["chunk_text"]
-            persona_text, custom_choice = get_persona_for_chat(organization_id)
+            persona_text, custom_choice = resolve_persona(organization_id, persona_id)
             if custom_choice:
                 answer = _apply_persona(answer, query, persona_text)
             best_similarity = top["similarity"]
@@ -446,7 +480,7 @@ def handle_chat(query: str, organization_id: str, user_id: str | None = None, hi
             used_kb_tool = True
 
     if answer is None:
-        answer, best_similarity, used_kb_tool, best_kb_result = _run_tool_loop(query, organization_id, history)
+        answer, best_similarity, used_kb_tool, best_kb_result = _run_tool_loop(query, organization_id, history, persona_id)
 
     if (used_kb_tool and best_similarity is not None
             and best_similarity >= CITATION_THRESHOLD and best_kb_result):
