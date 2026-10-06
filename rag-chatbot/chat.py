@@ -317,14 +317,27 @@ def _bedrock_client():
     return boto3.client("bedrock-runtime", region_name=region)
 
 
+COMPLEX_PROMPT_HINT = (
+    "\n\nهذا السؤال مركّب أو يحتوي على أكثر من جزء. ابحث في قاعدة المعرفة (search_knowledge_base) "
+    "بشكل منفصل لكل جزء من السؤال باستخدام استعلام قصير ومحدد لكل جزء، ثم اجمع النتائج في إجابة واحدة "
+    "منظمة تغطي كل الأجزاء، واعتمد فقط على النصوص المسترجعة."
+)
+
+
 def _run_tool_loop(query: str, organization_id: str, history: list = None,
-                   persona_id: str | None = None) -> tuple[str, float | None, bool, dict | None]:
+                   persona_id: str | None = None,
+                   complex_query: bool = False) -> tuple[str, float | None, bool, dict | None]:
+    """complex_query=True (multi-part / reasoning questions): the model is told to
+    search once per sub-question and search_knowledge_base uses the model's own
+    sub-query instead of always re-using the full user message."""
     if history is None:
         history = []
     client = _bedrock_client()
     messages = history + [{"role": "user", "content": [{"text": query}]}]
     persona_text, _ = resolve_persona(organization_id, persona_id)
-    system_prompt = build_system_prompt(persona_text) + (SQL_PROMPT_HINT if _sql_enabled() else "")
+    system_prompt = (build_system_prompt(persona_text)
+                     + (SQL_PROMPT_HINT if _sql_enabled() else "")
+                     + (COMPLEX_PROMPT_HINT if complex_query else ""))
 
     best_kb_similarity = None
     used_kb_tool = False
@@ -361,7 +374,8 @@ def _run_tool_loop(query: str, organization_id: str, history: list = None,
             if fn is None:
                 result = {"error": f"Unknown tool: {name}"}
             elif name == "search_knowledge_base":
-                result = fn({"query": query}, organization_id)
+                sub_query = (tool_input.get("query") or "").strip() if complex_query else ""
+                result = fn({"query": sub_query or query}, organization_id)
             elif name == "create_ticket":
                 result = fn(tool_input, organization_id, transcript=_messages_to_transcript(messages))
             else:
@@ -435,6 +449,29 @@ def _apply_persona(chunk_text: str, query: str, persona_text: str) -> str:
         return chunk_text
 
 
+def _synthesize_answer(chunks: list, query: str, persona_text: str) -> str | None:
+    """MODERATE questions: ONE Bedrock call (no tools) that writes a single answer
+    from several retrieved passages. Returns None on any failure so the caller can
+    fall back to the full tool loop."""
+    try:
+        passages = "\n\n".join(
+            f"[{i}] ({c['source_file']} - صفحة {c['page_number']})\n{c['chunk_text']}"
+            for i, c in enumerate(chunks, 1)
+        )
+        response = _bedrock_client().converse(
+            modelId=CHAT_MODEL_ID,
+            system=[{"text": HEADER + persona_text + PERSONA_GUARD +
+                     "أجب عن سؤال العميل اعتمادًا فقط على النصوص المرجعية التالية، وغطِّ كل أجزاء السؤال. "
+                     "إذا لم يوجد جواب لجزء ما في النصوص فاذكر أنه غير متوفر ولا تخترع معلومات. "
+                     "أجب بنفس لغة السؤال، وبإيجاز، ولا تذكر أرقام النصوص."}],
+            messages=[{"role": "user", "content": [{"text": f"سؤال العميل: {query}\n\nالنصوص المرجعية:\n{passages}"}]}],
+        )
+        parts = [b["text"] for b in response["output"]["message"]["content"] if "text" in b]
+        return " ".join(parts).strip() or None
+    except Exception:
+        return None
+
+
 def handle_chat(query: str, organization_id: str, user_id: str | None = None, history: list = None,
                 persona_id: str | None = None) -> dict:
     if history is None:
@@ -483,43 +520,63 @@ def handle_chat(query: str, organization_id: str, user_id: str | None = None, hi
             "latency_ms": latency_ms,
         }
 
-    # Try a direct KB search first (cheap, no Bedrock generation call).
-    # If it already clears the threshold, answer from it directly.
-    # Skipped when the message clearly needs a tool (ticket / lookup / order / SQL):
-    # a KB chunk can never answer those, and the search would only add latency.
-    direct_results = []
-    if analysis.route == "rag":
-        try:
-            direct_results = search_chunks(query, organization_id, top_k=3)
-        except Exception:
-            direct_results = []
-
+    # The complexity LEVEL decides HOW the answer is produced (route=="rag" only;
+    # tools / sql routes always go straight to the tool loop):
+    #   simple   -> direct KB search, answer = best chunk          (no Bedrock call)
+    #   moderate -> wider KB search + ONE Bedrock call to compose  (no tools)
+    #   complex  -> full tool loop, one search per sub-question
+    # Anything that does not clear CITATION_THRESHOLD falls through to the tool loop.
     best_kb_result = None
     best_similarity = None
     used_kb_tool = False
     answer = None
+    answer_mode = "tool_loop"
+    cited = []
 
-    if direct_results:
-        top = max(direct_results, key=lambda r: r["similarity"])
-        if top["similarity"] >= CITATION_THRESHOLD:
-            answer = top["chunk_text"]
-            persona_text, custom_choice = resolve_persona(organization_id, persona_id)
-            if custom_choice:
-                answer = _apply_persona(answer, query, persona_text)
-            best_similarity = top["similarity"]
-            best_kb_result = top
-            used_kb_tool = True
+    if analysis.route == "rag" and analysis.level in ("simple", "moderate"):
+        try:
+            direct_results = search_chunks(query, organization_id, top_k=3 if analysis.level == "simple" else 5)
+        except Exception:
+            direct_results = []
+
+        if direct_results:
+            top = max(direct_results, key=lambda r: r["similarity"])
+            if top["similarity"] >= CITATION_THRESHOLD:
+                persona_text, custom_choice = resolve_persona(organization_id, persona_id)
+                if analysis.level == "simple":
+                    answer = top["chunk_text"]
+                    if custom_choice:
+                        answer = _apply_persona(answer, query, persona_text)
+                    answer_mode, cited = "direct", [top]
+                else:
+                    relevant = sorted((r for r in direct_results if r["similarity"] >= CITATION_THRESHOLD),
+                                      key=lambda r: r["similarity"], reverse=True)[:4]
+                    answer = _synthesize_answer(relevant, query, persona_text)
+                    if answer:
+                        answer_mode, cited = "synthesized", relevant
+                if answer:
+                    best_similarity = top["similarity"]
+                    best_kb_result = top
+                    used_kb_tool = True
 
     if answer is None:
-        answer, best_similarity, used_kb_tool, best_kb_result = _run_tool_loop(query, organization_id, history, persona_id)
+        answer, best_similarity, used_kb_tool, best_kb_result = _run_tool_loop(
+            query, organization_id, history, persona_id,
+            complex_query=(analysis.route == "rag" and analysis.level == "complex"))
+        cited = [best_kb_result] if best_kb_result else []
 
     if (used_kb_tool and best_similarity is not None
             and best_similarity >= CITATION_THRESHOLD and best_kb_result):
         source_type = "kb_match"
-        answer = f"{answer}\n\nالمصدر: {best_kb_result['source_file']} - الصفحة {best_kb_result['page_number']}"
+        seen, labels = set(), []
+        for c in cited or [best_kb_result]:
+            key = (c["source_file"], c["page_number"])
+            if key not in seen:
+                seen.add(key)
+                labels.append(f"{c['source_file']} - الصفحة {c['page_number']}")
+        answer = f"{answer}\n\nالمصدر: " + "، ".join(labels)
     else:
         source_type = "fallback_general"
-        answer = answer
 
     latency_ms = int((time.time() - start) * 1000)
     interaction_id = _log_interaction(
@@ -535,6 +592,7 @@ def handle_chat(query: str, organization_id: str, user_id: str | None = None, hi
         "source_type": source_type,
         "similarity_score": best_similarity,
         "complexity": analysis.to_dict(),
+        "answer_mode": answer_mode,
         "latency_ms": latency_ms,
     }
 

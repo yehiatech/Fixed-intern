@@ -48,6 +48,7 @@ _SMALLTALK_SOURCE = {
         "hi", "hii", "hello", "hey", "heya", "good morning", "good afternoon", "good evening",
         "هاي", "هلا", "هلو", "اهلا", "اهلا وسهلا", "اهلا بيك", "اهلا بك", "اهلين", "مرحبا", "مرحبتين",
         "نورت", "السلام عليكم", "سلام عليكم", "وعليكم السلام", "ورحمه الله", "وبركاته",
+        "و رحمه الله", "و رحمه الله وبركاته",
         "صباح الخير", "صباح النور", "مساء الخير", "مساء النور", "صباحو", "مساء الفل", "صباح الفل",
     ],
     "how_are_you": [
@@ -69,7 +70,7 @@ _SMALLTALK_SOURCE = {
         "ok", "okay", "k", "alright", "got it", "اوكي", "اوك", "تمام", "حاضر", "ماشي", "طيب", "كده تمام",
     ],
     "neutral": ["سلام"],          # "سلام" alone can be hello OR bye
-    "filler": ["يا", "بوت", "جدا", "كتير", "اوي", "ليك", "لك", "كده", "جميعا", "بيك", "بك", "very", "much"],
+    "filler": ["يا", "بوت", "جدا", "كتير", "اوي", "ليك", "لك", "كده", "جميعا", "بيك", "بك", "very", "much", "bot", "there"],
 }
 
 _PHRASES: dict[str, str] = {}
@@ -108,6 +109,22 @@ _REPLIES = {
         "neutral": ["Hi! Let me know if you need any help."],
     },
 }
+
+
+def _canned_replies() -> set:
+    return {normalize(r) for lang in _REPLIES.values() for replies in lang.values() for r in replies}
+
+
+_CANNED = None
+
+
+def _is_canned_reply(text: str) -> bool:
+    """True if `text` is exactly one of our own small-talk replies. Those end with
+    'how can I help you?', which must not be mistaken for a real question."""
+    global _CANNED
+    if _CANNED is None:
+        _CANNED = _canned_replies()
+    return normalize(text) in _CANNED
 
 
 def _last_assistant_text(history) -> str:
@@ -149,7 +166,8 @@ def detect_smalltalk(query: str, history=None) -> tuple[str, str] | None:
     # a bare "سلام" / "ok" is probably the ANSWER, not small talk. Only
     # thanks / goodbye are still safe to shortcut then.
     last = _last_assistant_text(history)
-    if _QUESTION_MARK.search(last) and not {"farewell", "thanks"} & set(real):
+    if (_QUESTION_MARK.search(last) and not _is_canned_reply(last)
+            and not {"farewell", "thanks"} & set(real)):
         return None
 
     if "farewell" in real:
@@ -210,8 +228,8 @@ ETA_SECONDS = {
     ("smalltalk", "instant"): (0.0, 0.2),
     ("blocked", "instant"): (0.0, 0.2),
     ("rag", "simple"): (1.0, 3.0),        # embedding + pgvector search (+ persona rewrite if custom)
-    ("rag", "moderate"): (2.0, 6.0),      # may fall back to the Bedrock tool loop
-    ("rag", "complex"): (4.0, 12.0),
+    ("rag", "moderate"): (3.0, 8.0),      # wider KB search + ONE Bedrock call to compose the answer
+    ("rag", "complex"): (5.0, 15.0),      # full Bedrock tool loop, one KB search per sub-question
     ("tools", "moderate"): (3.0, 10.0),   # 1-3 Bedrock round-trips
     ("tools", "complex"): (5.0, 15.0),
     ("sql", "moderate"): (8.0, 25.0),     # Bedrock + SQL generation + DB + Bedrock
