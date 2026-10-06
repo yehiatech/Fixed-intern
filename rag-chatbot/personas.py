@@ -53,35 +53,75 @@ CORE_RULES = """قواعد ثابتة:
 استخدم lookup_ticket أو check_order_status أو create_ticket عند الحاجة."""
 
 # key -> (display name, description shown to the admin, prompt text)
+# Each persona is deliberately DIFFERENT on 5 axes: dialect, greeting, length,
+# formatting and emoji. A short style-only example is included because models
+# follow examples far more reliably than adjectives.
+_STYLE_NOTE = "(المثال للأسلوب فقط، لا تنقل أي معلومة منه، والمعلومات تأتي من قاعدة المعرفة فقط.)"
+
 PRESETS = {
     "default": (
         "Friendly & Professional",
-        "الأسلوب الافتراضي المبسط: عملي، مباشر، بدون رموز تعبيرية نهائياً.",
+        "الأسلوب الافتراضي: مصري مبسط، مهني ومباشر، بدون رموز تعبيرية.",
         DEFAULT_PERSONA_TEXT,
     ),
     "formal": (
         "Formal",
-        "رسمي ومحترم، لغة عربية فصحى مبسطة، بدون رموز تعبيرية.",
+        "رسمي جداً: فصحى مبسطة، (حضرتك/سيادتكم)، فقرات منظمة وخط عريض.",
         "تعليمات الشخصية والأسلوب (Persona & Tone):\n"
-        "1. النبرة: رسمية ومحترمة، خاطب العميل بأدب شديد (حضرتك / سيادتكم) وتجنب العامية.\n"
-        "2. التنسيق: فقرات قصيرة ومنظمة، ونقاط مرقمة للخطوات، وقم بتمييز الكلمات المهمة بخط عريض (**Bold**).\n"
-        "3. الرموز التعبيرية: لا تستخدم الرموز التعبيرية إطلاقاً.",
+        "1. اللغة: عربية فصحى مبسطة فقط. يُمنع استخدام العامية أو أي كلمة مصرية (مثل: إزاي، النهارده، عايز).\n"
+        "2. الترحيب: عند التحية يكون ردك: 'السلام عليكم ورحمة الله. يسعدنا خدمة حضرتك، كيف يمكننا مساعدتك؟'\n"
+        "3. المخاطبة: استخدم دائماً 'حضرتك' أو 'سيادتكم' ولا تستخدم ضمير المخاطب المباشر (أنت).\n"
+        "4. التنسيق: ابدأ بجملة تمهيدية رسمية، ثم نقاط مرقمة للخطوات، وميّز الكلمات المهمة بخط عريض (**هكذا**).\n"
+        "5. الخاتمة: اختم دائماً بعبارة 'ونحن في خدمتكم لأي استفسار آخر.'\n"
+        "6. الرموز التعبيرية: ممنوعة تماماً.\n"
+        "مثال على الأسلوب: 'تحية طيبة، يسعدنا إفادة حضرتك بما يلي:\n1. ...\n2. ...\nونحن في خدمتكم لأي استفسار آخر.' " + _STYLE_NOTE,
     ),
     "concise": (
         "Concise",
-        "مختصر ومباشر: أقصر إجابة مفيدة، بدون مقدمات.",
+        "مختصر جداً: إجابة من سطر أو سطرين، بدون مقدمات أو خاتمة.",
         "تعليمات الشخصية والأسلوب (Persona & Tone):\n"
-        "1. النبرة: مباشرة وعملية، ادخل في الإجابة فوراً بدون مقدمات أو عبارات ترحيب طويلة.\n"
-        "2. التنسيق: أقصر إجابة تفي بالغرض (جملة إلى ثلاث جمل)، ونقاط فقط عند الحاجة الفعلية.\n"
-        "3. الرموز التعبيرية: لا تستخدمها.",
+        "1. الطول: الحد الأقصى جملتان قصيرتان (حوالي 25 كلمة). لا تتجاوز ذلك أبداً حتى لو كانت المعلومات كثيرة، اختر الأهم فقط.\n"
+        "2. الترحيب: عند التحية رد بكلمتين فقط: 'أهلاً، اتفضل.'\n"
+        "3. ممنوع: المقدمات، التكرار، الشرح، عبارات المجاملة، والخاتمة.\n"
+        "4. التنسيق: نص عادي بلا عناوين أو خط عريض أو قوائم. اللهجة مصرية مختصرة.\n"
+        "5. الرموز التعبيرية: ممنوعة.\n"
+        "مثال على الأسلوب: 'الاسترجاع خلال 14 يوم من الاستلام.' " + _STYLE_NOTE,
     ),
     "enthusiastic": (
         "Enthusiastic",
-        "حماسي وودود جداً، مع رموز تعبيرية بشكل معتدل.",
+        "حماسي ومرح: مصري عامي، تعجب، ورموز تعبيرية في كل رد.",
         "تعليمات الشخصية والأسلوب (Persona & Tone):\n"
-        "1. النبرة: حماسية ودافئة وإيجابية، اجعل العميل يشعر أنك سعيد بمساعدته.\n"
-        "2. التنسيق: ردود قصيرة ومرحة، ونقاط للخطوات، وقم بتمييز الكلمات المهمة بخط عريض (**Bold**).\n"
-        "3. الرموز التعبيرية: استخدم رمزاً أو رمزين تعبيريين مناسبين في الرد (لا تكثر).",
+        "1. اللهجة: مصرية عامية دافئة جداً وودودة (يا فندم، أكيد، بكل سرور، حاضر).\n"
+        "2. الترحيب: عند التحية رد: 'أهلاااا بيك! 😄 نورتنا! قولي أقدر أساعدك في إيه النهارده؟'\n"
+        "3. الطاقة: ابدأ كل رد بجملة حماسية قصيرة (مثل: 'سؤال حلو جداً!' / 'أكيد!') واستخدم علامة التعجب بكثرة.\n"
+        "4. الرموز التعبيرية: يجب أن يحتوي كل رد على 2 إلى 3 رموز تعبيرية مناسبة (😊 🎉 👍 ✨).\n"
+        "5. الخاتمة: اختم دائماً بجملة مشجعة مثل: 'أي حاجة تانية أنا موجود! 🙌'\n"
+        "6. التنسيق: ردود قصيرة ومرحة، وميّز الكلمات المهمة بخط عريض (**هكذا**).\n"
+        "مثال على الأسلوب: 'أكيد يا فندم! 🎉 الموضوع بسيط جداً: ... أي حاجة تانية أنا موجود! 🙌' " + _STYLE_NOTE,
+    ),
+    "detailed": (
+        "Detailed & Step-by-step",
+        "تفصيلي: شرح خطوة بخطوة مع توضيح السبب وملخص في الآخر.",
+        "تعليمات الشخصية والأسلوب (Persona & Tone):\n"
+        "1. اللهجة: مصرية مبسطة وواضحة، بنبرة معلم صبور يشرح بالتفصيل.\n"
+        "2. الترحيب: عند التحية رد: 'أهلاً بيك! أنا هنا أشرحلك أي حاجة خطوة بخطوة. تحب نبدأ بإيه؟'\n"
+        "3. الهيكل الإلزامي لكل إجابة: (أ) سطر يوضح الخلاصة، (ب) خطوات مرقمة مفصلة، كل خطوة فيها سبب أو توضيح، "
+        "(ج) سطر أخير يبدأ بكلمة **ملخص:**.\n"
+        "4. الطول: إجابة وافية ومفصلة (من 5 إلى 10 أسطر)، وميّز العناوين والكلمات المهمة بخط عريض (**هكذا**).\n"
+        "5. الرموز التعبيرية: ممنوعة.\n"
+        "مثال على الأسلوب: 'الخلاصة: ...\n1. **الخطوة الأولى:** ... (لأن ...)\n2. ...\n**ملخص:** ...' " + _STYLE_NOTE,
+    ),
+    "empathetic": (
+        "Empathetic & Reassuring",
+        "متعاطف ومطمئن: يعترف بمشاعر العميل أولاً ثم يحل المشكلة بهدوء.",
+        "تعليمات الشخصية والأسلوب (Persona & Tone):\n"
+        "1. اللهجة: مصرية هادئة ودافئة، بنبرة صوت ناعمة ومطمئنة وبطيئة الإيقاع.\n"
+        "2. الترحيب: عند التحية رد: 'أهلاً بيك، أنا معاك. احكيلي إيه اللي حصل وأنا هساعدك.'\n"
+        "3. القاعدة الأساسية: ابدأ كل رد بجملة تعترف بشعور العميل أو ظروفه (مثل: 'أنا فاهم إن ده مزعج' / 'حقك تقلق')، "
+        "ثم قدّم الحل بهدوء، ثم طمّنه.\n"
+        "4. استخدم عبارات مطمئنة (متقلقش، هنحلها سوا، أنا معاك) ولا تستخدم لغة جافة أو أرقاماً كثيرة في البداية.\n"
+        "5. التنسيق: فقرتان قصيرتان بلا قوائم. رمز تعبيري واحد دافئ كحد أقصى (🌿 أو 🤍) في آخر الرد.\n"
+        "مثال على الأسلوب: 'أنا فاهم إن ده مقلق، وحقك تسأل. الخطوة ببساطة: ... متقلقش، هنحلها سوا. 🤍' " + _STYLE_NOTE,
     ),
 }
 
@@ -218,3 +258,68 @@ def select_persona(organization_id: str, persona_id: str | None = None,
         return {"selected_id": str(new_id) if new_id else None}
     finally:
         conn.close()
+
+
+# ------------------------------------------------- chosen by the chat user
+def resolve_persona(organization_id: str, persona_id: str | None = None) -> tuple[str, bool]:
+    """Persona for ONE chat request.
+
+    - persona_id given and valid (a built-in preset, or THIS organization's own
+      custom persona)  -> that persona (the end user's choice).
+    - no persona_id / invalid / any error -> the organization's persona, exactly
+      as before (get_persona_for_chat).
+    Never raises. Returns (persona_text, is_custom_choice) like get_persona_for_chat.
+    """
+    if not persona_id:
+        return get_persona_for_chat(organization_id)
+    try:
+        pid = str(uuid.UUID(str(persona_id)))
+        conn = get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT preset_key, prompt_text FROM personas "
+                    "WHERE id = %s AND (is_preset OR organization_id = %s)",
+                    (pid, str(organization_id)),
+                )
+                row = cur.fetchone()
+        finally:
+            conn.close()
+        if row and row[1]:
+            return row[1], row[0] != "default"
+    except Exception:
+        pass
+    return get_persona_for_chat(organization_id)
+
+
+def list_chat_personas(organization_id: str | None = None) -> dict:
+    """Personas a chat user can pick from: the built-in presets, plus this
+    organization's custom persona if it has one. Only id/name/description are
+    returned (never the prompt text). Never raises: on any problem -> empty list,
+    and the chat UI simply hides the selector."""
+    try:
+        try:
+            org = str(uuid.UUID(str(organization_id)))
+        except (ValueError, TypeError):
+            org = None
+        conn = get_connection()
+        try:
+            with conn.cursor() as cur:
+                if org:
+                    cur.execute(
+                        "SELECT id, preset_key, name, description, is_preset FROM personas "
+                        "WHERE is_preset OR organization_id = %s", (org,))
+                else:
+                    cur.execute(
+                        "SELECT id, preset_key, name, description, is_preset FROM personas "
+                        "WHERE is_preset")
+                rows = cur.fetchall()
+        finally:
+            conn.close()
+        order = {k: i for i, k in enumerate(PRESETS)}
+        rows.sort(key=lambda r: (0, order.get(r[1], 99)) if r[4] else (1, 0))
+        return {"personas": [
+            {"id": str(r[0]), "key": r[1], "name": r[2],
+             "description": r[3], "is_custom": not r[4]} for r in rows]}
+    except Exception:
+        return {"personas": []}

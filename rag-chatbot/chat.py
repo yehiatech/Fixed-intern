@@ -28,7 +28,16 @@ import requests
 from db import get_connection
 from ingestion import search_chunks
 from ticket_service import create_ticket_record, TicketError
-from sql.sql_query import run_structured_query
+try:  # Text-to-SQL is optional: if it cannot load, the chatbot still works without it
+    from sql.sql_query import run_structured_query
+except Exception as _sql_err:
+    try:
+        from sql_query import run_structured_query
+    except Exception:
+        print(f"[chat] Text-to-SQL disabled (could not load): {_sql_err}")
+        run_structured_query = None
+from personas import build_system_prompt, resolve_persona, HEADER, PERSONA_GUARD
+from complexity import analyze, instant
 
 
 CHAT_MODEL_ID = os.getenv("CHAT_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
@@ -107,6 +116,9 @@ def _tool_query_structured_data(tool_input: dict, organization_id: str) -> dict:
     (handle_chat's parameter), never from the model's tool_input, so the
     model cannot ask for a different tenant's data through this path."""
     question = tool_input.get("question", "")
+    if run_structured_query is None:
+        return {"status": "error", "answer": None,
+                "message": "عذرًا، تعذر الوصول إلى البيانات حاليًا. برجاء المحاولة لاحقًا."}
     return run_structured_query(question, organization_id, get_connection)
 
 
@@ -277,6 +289,27 @@ SYSTEM_PROMPT = """أنت مساعد ذكي لخدمة العملاء. هدفك 
 استخدم query_structured_data فقط للأسئلة التي تحتاج عد أو تصفية أو سرد للتذاكر (مثل "كام تذكرة مفتوحة؟")."""
 
 
+SQL_TOOL_NAME = "query_structured_data"
+SQL_PROMPT_HINT = ("\nاستخدم query_structured_data فقط للأسئلة التي تحتاج عد أو تصفية أو سرد للتذاكر "
+                   "(مثل \"كام تذكرة مفتوحة؟\").")
+
+
+def _sql_enabled() -> bool:
+    """The SQL tool is on only if its module loaded AND it is configured
+    (OPENAI_API_KEY + SQL_ALLOWED_TABLES). Otherwise the chatbot behaves exactly
+    as it did before the SQL feature existed."""
+    return (run_structured_query is not None
+            and bool(os.getenv("OPENAI_API_KEY"))
+            and bool(os.getenv("SQL_ALLOWED_TABLES")))
+
+
+def _active_tool_config() -> dict:
+    if _sql_enabled():
+        return TOOL_CONFIG
+    return {**TOOL_CONFIG,
+            "tools": [t for t in TOOL_CONFIG["tools"] if t["toolSpec"]["name"] != SQL_TOOL_NAME]}
+
+
 def _bedrock_client():
     region = os.getenv("AWS_REGION")
     if not region:
@@ -284,22 +317,36 @@ def _bedrock_client():
     return boto3.client("bedrock-runtime", region_name=region)
 
 
-def _run_tool_loop(query: str, organization_id: str, history: list = None) -> tuple[str, float | None, bool, dict | None]:
+COMPLEX_PROMPT_HINT = (
+    "\n\nهذا السؤال مركّب أو يحتوي على أكثر من جزء. ابحث في قاعدة المعرفة (search_knowledge_base) "
+    "بشكل منفصل لكل جزء من السؤال باستخدام استعلام قصير ومحدد لكل جزء، ثم اجمع النتائج في إجابة واحدة "
+    "منظمة تغطي كل الأجزاء، واعتمد فقط على النصوص المسترجعة."
+)
+
+
+def _run_tool_loop(query: str, organization_id: str, history: list = None,
+                   persona_id: str | None = None,
+                   complex_query: bool = False) -> tuple[str, float | None, bool, dict | None]:
+    """complex_query=True (multi-part / reasoning questions): the model is told to
+    search once per sub-question and search_knowledge_base uses the model's own
+    sub-query instead of always re-using the full user message."""
     if history is None:
         history = []
     client = _bedrock_client()
     messages = history + [{"role": "user", "content": [{"text": query}]}]
-    persona_text, _ = get_persona_for_chat(organization_id)
-    system_prompt = build_system_prompt(persona_text)
+    persona_text, _ = resolve_persona(organization_id, persona_id)
+    system_prompt = (build_system_prompt(persona_text)
+                     + (SQL_PROMPT_HINT if _sql_enabled() else "")
+                     + (COMPLEX_PROMPT_HINT if complex_query else ""))
 
     best_kb_similarity = None
     used_kb_tool = False
     best_kb_result = None
 
     for i in range(MAX_TOOL_ITERATIONS):
-        tool_config = TOOL_CONFIG
+        tool_config = _active_tool_config()
         if i == 0:
-            tool_config = {**TOOL_CONFIG, "toolChoice": {"any": {}}}
+            tool_config = {**tool_config, "toolChoice": {"any": {}}}
 
         response = client.converse(
             modelId=CHAT_MODEL_ID,
@@ -327,7 +374,8 @@ def _run_tool_loop(query: str, organization_id: str, history: list = None) -> tu
             if fn is None:
                 result = {"error": f"Unknown tool: {name}"}
             elif name == "search_knowledge_base":
-                result = fn({"query": query}, organization_id)
+                sub_query = (tool_input.get("query") or "").strip() if complex_query else ""
+                result = fn({"query": sub_query or query}, organization_id)
             elif name == "create_ticket":
                 result = fn(tool_input, organization_id, transcript=_messages_to_transcript(messages))
             else:
@@ -401,10 +449,58 @@ def _apply_persona(chunk_text: str, query: str, persona_text: str) -> str:
         return chunk_text
 
 
-def handle_chat(query: str, organization_id: str, user_id: str | None = None, history: list = None) -> dict:
+def _synthesize_answer(chunks: list, query: str, persona_text: str) -> str | None:
+    """MODERATE questions: ONE Bedrock call (no tools) that writes a single answer
+    from several retrieved passages. Returns None on any failure so the caller can
+    fall back to the full tool loop."""
+    try:
+        passages = "\n\n".join(
+            f"[{i}] ({c['source_file']} - صفحة {c['page_number']})\n{c['chunk_text']}"
+            for i, c in enumerate(chunks, 1)
+        )
+        response = _bedrock_client().converse(
+            modelId=CHAT_MODEL_ID,
+            system=[{"text": HEADER + persona_text + PERSONA_GUARD +
+                     "أجب عن سؤال العميل اعتمادًا فقط على النصوص المرجعية التالية، وغطِّ كل أجزاء السؤال. "
+                     "إذا لم يوجد جواب لجزء ما في النصوص فاذكر أنه غير متوفر ولا تخترع معلومات. "
+                     "أجب بنفس لغة السؤال، وبإيجاز، ولا تذكر أرقام النصوص."}],
+            messages=[{"role": "user", "content": [{"text": f"سؤال العميل: {query}\n\nالنصوص المرجعية:\n{passages}"}]}],
+        )
+        parts = [b["text"] for b in response["output"]["message"]["content"] if "text" in b]
+        return " ".join(parts).strip() or None
+    except Exception:
+        return None
+
+
+def handle_chat(query: str, organization_id: str, user_id: str | None = None, history: list = None,
+                persona_id: str | None = None) -> dict:
     if history is None:
         history = []
     start = time.time()
+
+    # 0. Triage (pure Python, ~1 ms): small talk / complexity / expected path + ETA.
+    analysis = analyze(query, history, sql_enabled=_sql_enabled())
+
+    # 0a. Greetings / thanks / bye: canned reply, NO retrieval and NO Bedrock call.
+    if analysis.route == "smalltalk":
+        latency_ms = int((time.time() - start) * 1000)
+        try:
+            interaction_id = _log_interaction(
+                organization_id, user_id, query, analysis.reply,
+                topic_guard_status="ALLOWED", source_type="smalltalk",
+                similarity_score=None, latency_ms=latency_ms,
+            )
+        except Exception:
+            interaction_id = None  # a logging failure must not break a greeting
+        return {
+            "answer": analysis.reply,
+            "interaction_id": interaction_id,
+            "topic_guard_status": "ALLOWED",
+            "source_type": "smalltalk",
+            "similarity_score": None,
+            "complexity": analysis.to_dict(),
+            "latency_ms": latency_ms,
+        }
 
     status, reason = topic_guard(query)
     if status == "BLOCKED":
@@ -420,41 +516,67 @@ def handle_chat(query: str, organization_id: str, user_id: str | None = None, hi
             "topic_guard_status": "BLOCKED",
             "source_type": None,
             "similarity_score": None,
+            "complexity": instant("blocked").to_dict(),
+            "latency_ms": latency_ms,
         }
 
-    # Try a direct KB search first (cheap, no Bedrock generation call).
-    # If it already clears the threshold, answer from it directly.
-    try:
-        direct_results = search_chunks(query, organization_id, top_k=3)
-    except Exception:
-        direct_results = []
-
+    # The complexity LEVEL decides HOW the answer is produced (route=="rag" only;
+    # tools / sql routes always go straight to the tool loop):
+    #   simple   -> direct KB search, answer = best chunk          (no Bedrock call)
+    #   moderate -> wider KB search + ONE Bedrock call to compose  (no tools)
+    #   complex  -> full tool loop, one search per sub-question
+    # Anything that does not clear CITATION_THRESHOLD falls through to the tool loop.
     best_kb_result = None
     best_similarity = None
     used_kb_tool = False
     answer = None
+    answer_mode = "tool_loop"
+    cited = []
 
-    if direct_results:
-        top = max(direct_results, key=lambda r: r["similarity"])
-        if top["similarity"] >= CITATION_THRESHOLD:
-            answer = top["chunk_text"]
-            persona_text, custom_choice = get_persona_for_chat(organization_id)
-            if custom_choice:
-                answer = _apply_persona(answer, query, persona_text)
-            best_similarity = top["similarity"]
-            best_kb_result = top
-            used_kb_tool = True
+    if analysis.route == "rag" and analysis.level in ("simple", "moderate"):
+        try:
+            direct_results = search_chunks(query, organization_id, top_k=3 if analysis.level == "simple" else 5)
+        except Exception:
+            direct_results = []
+
+        if direct_results:
+            top = max(direct_results, key=lambda r: r["similarity"])
+            if top["similarity"] >= CITATION_THRESHOLD:
+                persona_text, custom_choice = resolve_persona(organization_id, persona_id)
+                if analysis.level == "simple":
+                    answer = top["chunk_text"]
+                    if custom_choice:
+                        answer = _apply_persona(answer, query, persona_text)
+                    answer_mode, cited = "direct", [top]
+                else:
+                    relevant = sorted((r for r in direct_results if r["similarity"] >= CITATION_THRESHOLD),
+                                      key=lambda r: r["similarity"], reverse=True)[:4]
+                    answer = _synthesize_answer(relevant, query, persona_text)
+                    if answer:
+                        answer_mode, cited = "synthesized", relevant
+                if answer:
+                    best_similarity = top["similarity"]
+                    best_kb_result = top
+                    used_kb_tool = True
 
     if answer is None:
-        answer, best_similarity, used_kb_tool, best_kb_result = _run_tool_loop(query, organization_id, history)
+        answer, best_similarity, used_kb_tool, best_kb_result = _run_tool_loop(
+            query, organization_id, history, persona_id,
+            complex_query=(analysis.route == "rag" and analysis.level == "complex"))
+        cited = [best_kb_result] if best_kb_result else []
 
     if (used_kb_tool and best_similarity is not None
             and best_similarity >= CITATION_THRESHOLD and best_kb_result):
         source_type = "kb_match"
-        answer = f"{answer}\n\nالمصدر: {best_kb_result['source_file']} - الصفحة {best_kb_result['page_number']}"
+        seen, labels = set(), []
+        for c in cited or [best_kb_result]:
+            key = (c["source_file"], c["page_number"])
+            if key not in seen:
+                seen.add(key)
+                labels.append(f"{c['source_file']} - الصفحة {c['page_number']}")
+        answer = f"{answer}\n\nالمصدر: " + "، ".join(labels)
     else:
         source_type = "fallback_general"
-        answer = answer
 
     latency_ms = int((time.time() - start) * 1000)
     interaction_id = _log_interaction(
@@ -469,7 +591,21 @@ def handle_chat(query: str, organization_id: str, user_id: str | None = None, hi
         "topic_guard_status": "ALLOWED",
         "source_type": source_type,
         "similarity_score": best_similarity,
+        "complexity": analysis.to_dict(),
+        "answer_mode": answer_mode,
+        "latency_ms": latency_ms,
     }
+
+
+def estimate_response(query: str, history: list = None) -> dict:
+    """Cheap pre-flight for the UI: how complex is this message and how long
+    will the answer take? Same triage as handle_chat, no DB / Bedrock calls."""
+    status, _ = topic_guard(query)
+    a = analyze(query, history or [], sql_enabled=_sql_enabled())
+    if a.route != "smalltalk" and status == "BLOCKED":
+        a = instant("blocked")
+    return a.to_dict()
+
 
 def submit_feedback(interaction_id: str, rating: str) -> dict:
     conn = get_connection()
