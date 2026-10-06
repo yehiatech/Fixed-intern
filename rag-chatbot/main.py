@@ -6,7 +6,7 @@ import os
 import shutil
 
 from ingestion import ingest_pdf
-from chat import handle_chat, submit_feedback
+from chat import handle_chat, submit_feedback, estimate_response
 
 app = FastAPI(
     title="Arabic RAG Chatbot Microservice",
@@ -63,6 +63,7 @@ class ChatRequest(BaseModel):
     user_id: Optional[str] = None
     query: str
     history: list[dict] = []
+    persona_id: Optional[str] = None  # the chat user's own pick; None = the organization's persona
 
 
 
@@ -129,10 +130,23 @@ class FeedbackRequest(BaseModel):
 @app.post("/chat")
 def chat(request: ChatRequest):
     try:
-        result = handle_chat(request.query, request.organization_id, request.user_id, request.history)
+        result = handle_chat(request.query, request.organization_id, request.user_id, request.history,
+                             persona_id=request.persona_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     return result
+
+# Instant complexity / ETA estimate (no DB, no LLM) so the widget can show
+# "about N seconds" while the real /chat call is still running.
+@app.post("/chat/estimate")
+def chat_estimate(request: ChatRequest):
+    return estimate_response(request.query, request.history)
+
+# Personas the chat user can choose from (presets + the org's custom one; no prompt text)
+@app.get("/chat/personas")
+def chat_personas(organization_id: Optional[str] = None):
+    from personas import list_chat_personas
+    return list_chat_personas(organization_id)
 
 # Original Ingest Endpoint
 @app.post("/ingest")
